@@ -7,6 +7,7 @@
 // ============================================================
 
 import { WorldModel } from "./observe";
+import { formatCompactUsd } from "@/lib/constants";
 
 export interface MemoryPattern {
   id: string;
@@ -22,10 +23,15 @@ export interface MemoryProfile {
   patterns: MemoryPattern[];
 }
 
+// ─── Robust Ordinal Formatter ──────────────────────────────
+// Replaces the brittle modulo hack with standard English ordinal rules.
 function ordinal(n: number): string {
-  const s = ["th", "st", "nd", "rd"];
-  const v = n % 100;
-  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  const j = n % 10;
+  const k = n % 100;
+  if (j === 1 && k !== 11) return `${n}st`;
+  if (j === 2 && k !== 12) return `${n}nd`;
+  if (j === 3 && k !== 13) return `${n}rd`;
+  return `${n}th`;
 }
 
 const SKIP_NAME = /top-?up|^close/i;
@@ -64,10 +70,12 @@ export function recallMemory(world: WorldModel): MemoryProfile {
   const corridors = new Map<string, { count: number; totalOut: number; days: number[] }>();
   for (const t of world.transactions) {
     if (t.rail !== "Internal FX" || t.type !== "out") continue;
-    const m = t.name.match(/Conversion USD → (\w+)/);
+    // Matches "Conversion USD → EUR" or similar patterns
+    const m = t.name.match(/Conversion\s+\w+\s+→\s+(\w+)/);
     if (!m) continue;
-    if (!corridors.has(m[1])) corridors.set(m[1], { count: 0, totalOut: 0, days: [] });
-    const g = corridors.get(m[1])!;
+    const targetCur = m[1];
+    if (!corridors.has(targetCur)) corridors.set(targetCur, { count: 0, totalOut: 0, days: [] });
+    const g = corridors.get(targetCur)!;
     g.count++;
     g.totalOut += t.amount;
     g.days.push(new Date(t.createdAt).getDate());
@@ -78,12 +86,13 @@ export function recallMemory(world: WorldModel): MemoryProfile {
     patterns.push({
       id: `corridor-${cur}`,
       kind: "corridor",
-      statement: `You convert USD → ${cur} regularly — ${g.count}× this month, usually around the ${ordinal(avgDay)}.`,
-      detail: `≈ $${Math.round(g.totalOut).toLocaleString()} moved in total.`,
+      statement: `You convert to ${cur} regularly — ${g.count}× this month, usually around the ${ordinal(avgDay)}.`,
+      // CRITICAL FIX: Use deterministic, locale-safe formatting
+      detail: `≈ ${formatCompactUsd(g.totalOut)} moved in total.`,
       confidence: Math.min(1, g.count / 8),
       evidence: [
-        `${g.count} USD → ${cur} conversions in the last 30 days.`,
-        `Total moved: $${Math.round(g.totalOut).toLocaleString()}.`,
+        `${g.count} conversions to ${cur} in the last 30 days.`,
+        `Total moved: ${formatCompactUsd(g.totalOut)}.`,
       ],
     });
   }

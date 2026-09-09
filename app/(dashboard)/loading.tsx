@@ -17,8 +17,8 @@ export default function DashboardLoading() {
         ))}
       </div>
 
-      {/* Intelligence panel */}
-      <div className="h-[180px] rounded-[20px] bg-[#0E1116] relative overflow-hidden">
+           {/* Intelligence panel */}
+      <div className="h-[180px] rounded-[20px] bg-[#F1EEE8] relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.04] to-transparent animate-pulse" />
       </div>
 

@@ -1,58 +1,113 @@
 import postgres from "postgres";
+import { DatabaseError } from "@/lib/errors";
 
-const url = process.env.DATABASE_URL || "";
-
-if (!url) {
-  console.error("❌ DATABASE_URL is missing in .env.local");
+// ─── Environment Validation ──────────────────────────────────
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  console.error("❌ FATAL: DATABASE_URL is not defined in environment");
+  process.exit(1);
 }
 
-// Initialize the postgres.js client
-const sql = postgres(url, {
-  max: 10,             // Restored for production speed
-  idle_timeout: 20,
-  connect_timeout: 30, // Generous timeout for Supabase cold starts
-  prepare: false,      // Crucial for Supabase Transaction Pooler
+// ─── Connection Pool ──────────────────────────────────────────
+const sql = postgres(DATABASE_URL, {
+  max: 20,
+  idle_timeout: 10,
+  connect_timeout: 15,
+  prepare: true,
+  debug: process.env.NODE_ENV === "development"
+    ? (connection: any, query: string, params: any[]) => {
+        console.log("🔍 Query:", query);
+        console.log("📦 Params:", params);
+      }
+    : false,
+  onnotice: (notice) => {
+    console.warn("📢 Postgres Notice:", notice.message);
+  },
 });
 
-// Helper to translate SQLite '?' to Postgres '$1, $2...'
-function toNumbered(query: string): string {
-  let i = 0;
-  return query.replace(/\?/g, () => `$${++i}`);
-}
+// ─── Type Helpers ─────────────────────────────────────────────
+export type QueryResult<T = any> = {
+  rows: T[];
+  rowCount: number;
+  lastInsertId?: number;
+};
 
-// Helper to translate SQLite DDL/functions to Postgres
-function pgCompat(query: string): string {
-  return query
-    .replace(/INTEGER PRIMARY KEY AUTOINCREMENT/gi, "SERIAL PRIMARY KEY")
-    .replace(/\bAUTOINCREMENT\b/gi, "")
-    .replace(/datetime\('now'\)/gi, "now()")
-    .replace(/datetime\('now',\s*'([^']+)'\)/gi, "now() + interval '$1'")
-    .replace(/REAL/gi, "DOUBLE PRECISION")
-    .replace(/CURRENT_TIMESTAMP/gi, "CURRENT_TIMESTAMP::text");
-}
-
+// ─── Main DB Client ───────────────────────────────────────────
 export const db = {
-  async execute(query: string, args: any[] = []) {
-    const text = toNumbered(pgCompat(query));
-
-    let rows: any[];
-    
-    // If it's an INSERT/UPDATE/DELETE and doesn't already have RETURNING, add it
-    // so we can grab the `lastInsertRowid` just like SQLite did.
-    if (/^\s*(INSERT|UPDATE|DELETE)\b/i.test(query) && !/\bRETURNING\b/i.test(query)) {
-      try {
-        rows = await sql.unsafe(`${text} RETURNING id`, args);
-      } catch {
-        // Fallback if the table doesn't have an 'id' column
-        rows = await sql.unsafe(text, args);
-      }
-    } else {
-      rows = await sql.unsafe(text, args);
+  async query<T = any>(
+    strings: TemplateStringsArray,
+    ...values: any[]
+  ): Promise<QueryResult<T>> {
+    try {
+      const result = await sql<T>`${sql(strings, ...values)}`;
+      return {
+        rows: result as T[],
+        rowCount: result.length,
+      };
+    } catch (error) {
+      console.error("❌ Database query failed:", error);
+      throw new DatabaseError("Query execution failed", {
+        cause: error,
+        query: strings.join("?"),
+      });
     }
+  },
 
+ async execute<T = any>(
+  query: string,
+  args: any[] = []
+): Promise<QueryResult<T>> {
+  try {
+    const trimmedQuery = query.trim();
+    
+    if (!trimmedQuery) {
+      return { rows: [], rowCount: 0 };
+    }
+    
+    const result = await sql.unsafe(trimmedQuery, args);
     return {
-      rows: (rows || []) as any[],
-      lastInsertRowid: (rows && rows[0] && rows[0].id) || 0,
+      rows: result as T[],
+      rowCount: result.length,
     };
+  } catch (error) {
+    console.error("❌ Database execute failed:", error);
+    throw new DatabaseError("Query execution failed", {
+      cause: error,
+      query,
+    });
+  }
+},
+
+  async transaction<T>(
+    callback: (trx: typeof sql) => Promise<T>
+  ): Promise<T> {
+    try {
+      return await sql.begin(async (trx) => {
+        return callback(trx);
+      });
+    } catch (error) {
+      console.error("❌ Transaction failed:", error);
+      throw new DatabaseError("Transaction failed", { cause: error });
+    }
+  },
+
+  async healthCheck(): Promise<boolean> {
+    try {
+      await sql`SELECT 1`;
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  getClient() {
+    return sql;
   },
 };
+
+export async function closeDatabaseConnection(): Promise<void> {
+  await sql.end();
+  console.log("✅ Database connection closed");
+}
+
+export default sql;

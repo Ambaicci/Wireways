@@ -3,14 +3,13 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Send, Loader2, AlertTriangle, Check, X,
-  ArrowRight, ArrowUpRight, Repeat, Plus, Link2, CalendarClock,
+  Send, Loader2, AlertTriangle, Check, X, ArrowRight, 
+  Repeat, Plus, Link2, CalendarClock, Zap, ShieldCheck
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import {
-  executePayment, executeConversionAndPayment, addFunds,
-  createPaymentLink, createWireRoll,
-} from "@/lib/actions";
+import { confirmAiDraft } from "@/lib/actions";
+import { formatCurrency } from "@/lib/constants";
+import WicIcon from "@/components/ui/WicIcon";
 
 interface DraftData {
   uuid: string;
@@ -22,38 +21,20 @@ interface DraftData {
   confirmationReason?: string;
 }
 
-const CURRENCY_SYMBOL: Record<string, string> = { USD: "$", EUR: "€", GBP: "£", USDC: "$", KES: "KSh " };
-
-function fmtMoney(amount: any, currency: string) {
-  const n = Number(amount);
-  if (isNaN(n)) return String(amount);
-  return `${CURRENCY_SYMBOL[currency] ?? currency + " "}${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
-}
-
-function calculateNextRun(freq: string): string {
-  const d = new Date();
-  if (freq === "weekly") d.setDate(d.getDate() + 7);
-  else if (freq === "biweekly") d.setDate(d.getDate() + 14);
-  else if (freq === "monthly") d.setMonth(d.getMonth() + 1);
-  else d.setDate(d.getDate() + 30);
-  return d.toISOString().slice(0, 10);
-}
-
-const ACTION_META: Record<string, { verb: string; accent: string; soft: string; cta: string }> = {
-  executePayment: { verb: "Sending", accent: "#F1622C", soft: "rgba(241,98,44,0.14)", cta: "Execute transfer" },
-  executeConversionAndPayment: { verb: "Converting", accent: "#7C8DB5", soft: "rgba(124,141,181,0.14)", cta: "Execute conversion" },
-  addFunds: { verb: "Adding funds", accent: "#287A55", soft: "rgba(40,122,85,0.14)", cta: "Add funds" },
-  createPaymentLink: { verb: "Requesting", accent: "#B98A2E", soft: "rgba(185,138,46,0.14)", cta: "Create link" },
-  createWireRoll: { verb: "Scheduling", accent: "#7C8DB5", soft: "rgba(124,141,181,0.14)", cta: "Create wire-roll" },
+const ACTION_META: Record<string, { verb: string; accent: string; soft: string; cta: string; icon: any }> = {
+  executePayment: { verb: "Send Payment", accent: "#F1622C", soft: "rgba(241,98,44,0.1)", cta: "Confirm & Send", icon: Zap },
+  executeConversionAndPayment: { verb: "Currency Conversion", accent: "#4C5C88", soft: "rgba(76,92,136,0.1)", cta: "Confirm Conversion", icon: Repeat },
+  addFunds: { verb: "Add Funds", accent: "#287A55", soft: "rgba(40,122,85,0.1)", cta: "Confirm Top-up", icon: Plus },
+  createPaymentLink: { verb: "Payment Request", accent: "#9C6B08", soft: "rgba(156,107,8,0.1)", cta: "Generate Link", icon: Link2 },
+  createWireRoll: { verb: "Recurring Payment", accent: "#4C5C88", soft: "rgba(76,92,136,0.1)", cta: "Schedule Wire-Roll", icon: CalendarClock },
 };
 
-const ACTION_ICON: Record<string, any> = {
-  executePayment: ArrowUpRight,
-  executeConversionAndPayment: Repeat,
-  addFunds: Plus,
-  createPaymentLink: Link2,
-  createWireRoll: CalendarClock,
-};
+const REASONING_STEPS = [
+  "Parsing natural language...",
+  "Identifying intent and entities...",
+  "Checking wallet balances and guardrails...",
+  "Drafting secure action..."
+];
 
 export default function AiCommandBar() {
   const router = useRouter();
@@ -64,11 +45,13 @@ export default function AiCommandBar() {
   const [isExecuting, setIsExecuting] = useState(false);
   const [toastMsg, setToastMsg] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [messages, setMessages] = useState<{ role: "user" | "assistant" | "success"; text: string }[]>([]);
+  const [reasoningIndex, setReasoningIndex] = useState(0);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const blurTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
+  const reasoningInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const engaged = focused || input.trim().length > 0 || isProcessing || !!toastMsg || !!draft || messages.length > 0;
 
@@ -83,18 +66,41 @@ export default function AiCommandBar() {
   }, [messages, isProcessing, draft]);
 
   useEffect(() => {
+    if (isProcessing) {
+      setReasoningIndex(0);
+      reasoningInterval.current = setInterval(() => {
+        setReasoningIndex((prev) => (prev < REASONING_STEPS.length - 1 ? prev + 1 : prev));
+      }, 600);
+    } else {
+      if (reasoningInterval.current) clearInterval(reasoningInterval.current);
+    }
+    return () => { if (reasoningInterval.current) clearInterval(reasoningInterval.current); };
+  }, [isProcessing]);
+
+  useEffect(() => {
     const down = (e: KeyboardEvent) => {
-      if (e.key === "k" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); textareaRef.current?.focus(); }
+      if (e.key === "k" && (e.metaKey || e.ctrlKey)) { 
+        e.preventDefault(); 
+        textareaRef.current?.focus(); 
+      }
+      if (e.key === "Escape" && engaged && !isProcessing) {
+        handleClear();
+        setFocused(false);
+      }
     };
     document.addEventListener("keydown", down);
     return () => document.removeEventListener("keydown", down);
-  }, []);
+  }, [engaged, isProcessing]);
 
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail as string;
-      setInput(detail);
-      textareaRef.current?.focus();
+      if (detail) {
+        setInput(detail);
+        setTimeout(() => textareaRef.current?.focus(), 50);
+      } else {
+        textareaRef.current?.focus();
+      }
     };
     window.addEventListener("prefill-ai-dock", handler);
     return () => window.removeEventListener("prefill-ai-dock", handler);
@@ -108,7 +114,7 @@ export default function AiCommandBar() {
   }, [input]);
 
   const handleFocus = () => { if (blurTimeout.current) clearTimeout(blurTimeout.current); setFocused(true); };
-  const handleBlur = () => { blurTimeout.current = setTimeout(() => setFocused(false), 200); };
+  const handleBlur = () => { blurTimeout.current = setTimeout(() => setFocused(false), 300); };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAiRequest(); }
@@ -121,6 +127,7 @@ export default function AiCommandBar() {
     setMessages(prev => [...prev, { role: "user", text: finalInput }]);
     setInput("");
     setIsProcessing(true);
+    setDraft(null);
 
     try {
       const response = await fetch("/api/ai", {
@@ -131,12 +138,12 @@ export default function AiCommandBar() {
       const data = await response.json();
       if (data.success && data.draft) {
         setDraft(data.draft);
-        setMessages(prev => [...prev, { role: "assistant", text: data.draft.message || "Draft prepared." }]);
+        setMessages(prev => [...prev, { role: "assistant", text: data.draft.message || "Draft prepared and ready for your review." }]);
       } else {
-        setMessages(prev => [...prev, { role: "assistant", text: data.message || "I couldn't understand that request." }]);
+        setMessages(prev => [...prev, { role: "assistant", text: data.message || "I couldn't understand that request. Please try rephrasing." }]);
       }
     } catch (error) {
-      setMessages(prev => [...prev, { role: "assistant", text: "I'm having trouble connecting right now." }]);
+      setMessages(prev => [...prev, { role: "assistant", text: "I'm having trouble connecting to the WIC engine right now." }]);
     } finally {
       setIsProcessing(false);
     }
@@ -145,219 +152,297 @@ export default function AiCommandBar() {
   const handleExecute = async () => {
     if (!draft) return;
     setIsExecuting(true);
-    let result;
-
     try {
-      if (draft.actionType === "executePayment") result = await executePayment(draft.payload);
-      else if (draft.actionType === "executeConversionAndPayment") result = await executeConversionAndPayment(draft.payload);
-      else if (draft.actionType === "addFunds") result = await addFunds(draft.payload);
-      else if (draft.actionType === "createPaymentLink") result = await createPaymentLink(draft.payload);
-      else if (draft.actionType === "createWireRoll") {
-        result = await createWireRoll({
-          name: draft.payload.description || `Recurring to ${draft.payload.recipient}`,
-          recipient: draft.payload.recipient,
-          amount: draft.payload.amount,
-          currency: draft.payload.currency,
-          frequency: draft.payload.frequency,
-          rail: draft.payload.rail || "Auto",
-          nextRunDate: calculateNextRun(draft.payload.frequency),
-        });
+      const result = await confirmAiDraft(draft.uuid);
+      if (result?.success) {
+        showToast((draft.message || "Action") + " executed successfully.", "success");
+        setMessages(prev => [...prev, { role: "success", text: "Transaction completed successfully." }]);
+        router.refresh();
+      } else {
+        showToast(result?.message || "Execution failed. Please check your balance or try again.", "error");
       }
-    } catch (err: any) {
-      result = { success: false, message: err.message || "Execution failed" };
+    } catch {
+      showToast("Execution failed. Please try again.", "error");
+    } finally {
+      setIsExecuting(false);
+      setDraft(null);
     }
-
-    if (result?.success) {
-      showToast(`${draft.message || "Action"} executed successfully.`, "success");
-      setMessages(prev => [...prev, { role: "success", text: "Executed successfully." }]);
-      router.refresh();
-    } else {
-      showToast(result?.message || "Execution failed", "error");
-    }
-    setDraft(null);
-    setIsExecuting(false);
-  };
-
-   const handleCancel = () => {
-    setDraft(null);
-    setMessages(prev => [...prev, { role: "assistant", text: "Cancelled. What would you like to do instead?" }]);
   };
 
   const handleClear = () => {
     setMessages([]);
     setDraft(null);
     setToastMsg(null);
+    setInput("");
   };
 
-  const payloadEntries = draft ? Object.entries(draft.payload || {}) : [];
   const meta = ACTION_META[draft?.actionType || "executePayment"] || ACTION_META.executePayment;
-  const ActionIcon = ACTION_ICON[draft?.actionType || "executePayment"] || ArrowUpRight;
+  const ActionIcon = meta.icon;
   const p = draft?.payload || {};
-  const isConvert = draft?.actionType === "executeConversionAndPayment";
-  const prettyKey = (k: string) => k.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase());
+  const isRateMissing = p.fromCurrency && p.toCurrency && p.fromCurrency !== p.toCurrency && (!p.rate || p.rate === 1);
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 flex justify-center pointer-events-none pb-5 px-4">
-      <div className="w-full max-w-[640px] pointer-events-auto flex flex-col items-center">
-        {/* Dock shell — same warm brown as the Briefing card */}
-        <motion.div
-          layout
-          className="w-full bg-[#312B1E] rounded-[24px] shadow-[0_24px_70px_rgba(24,19,14,0.45)] border border-white/10 overflow-hidden"
-          initial={false}
-          animate={{ scale: engaged ? 1 : 0.98, opacity: engaged ? 1 : 0.96 }}
-          transition={{ type: "spring", damping: 26, stiffness: 300 }}
-        >
-          {/* Conversation + receipt */}
-                   <AnimatePresence>
-            {(messages.length > 0 || isProcessing) && (
-              <motion.div
-                ref={chatScrollRef}
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", maxHeight: 400, opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                className="overflow-y-auto border-b border-white/10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden relative"
-              >
-                {/* Clear button */}
-                {messages.length > 0 && !isProcessing && (
-                  <button
-                    onClick={handleClear}
-                    className="absolute top-2 right-2 w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-[#9C9488] hover:text-white transition-colors z-10"
-                    title="Clear conversation"
+    <>
+      {/* ─── CRISP DIM BACKDROP ────── */}
+      <AnimatePresence>
+        {engaged && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-40 bg-black/20" 
+            onClick={() => {
+              if (!isProcessing && !draft) {
+                handleClear();
+                setFocused(false);
+              }
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ─── MAIN DOCK CARD ────── */}
+      <motion.div
+        layout
+        className="w-full bg-white rounded-t-[28px] rounded-b-none shadow-[0_-10px_50px_rgba(0,0,0,0.08)] border-t border-x border-[#E5E5EA] overflow-hidden relative z-50"
+        initial={false}
+        animate={{ scale: engaged ? 1 : 0.98, opacity: engaged ? 1 : 0.95 }}
+        transition={{ type: "spring", damping: 30, stiffness: 400 }}
+      >
+        <AnimatePresence>
+          {(messages.length > 0 || isProcessing) && (
+            <motion.div
+              ref={chatScrollRef}
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", maxHeight: 450, opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ type: "spring", damping: 30, stiffness: 400 }}
+              className="overflow-y-auto border-b border-[#E5E5EA] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden relative bg-[#FAFAFA]"
+            >
+              {messages.length > 0 && !isProcessing && !draft && (
+                <button
+                  onClick={handleClear}
+                  className="absolute top-3 right-3 w-7 h-7 rounded-full bg-[#F5F5F7] hover:bg-[#E5E5EA] flex items-center justify-center text-[#86868B] hover:text-[#1D1D1F] transition-colors z-10"
+                  title="Clear conversation (Esc)"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+              
+              <div className="p-5 space-y-4">
+                {messages.map((m, i) => (
+                  <motion.div 
+                    key={i} 
+                    initial={{ opacity: 0, y: 10 }} 
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className={"flex " + (m.role === "user" ? "justify-end" : "justify-start")}
                   >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+                    <div className={"max-w-[85%] px-4 py-3 rounded-2xl text-[13.5px] leading-relaxed " + (
+                      m.role === "user" ? "bg-[#F1622C] text-white rounded-br-md" :
+                      m.role === "success" ? "bg-[#E7F2EC] text-[#287A55] rounded-bl-md" :
+                      "bg-[#F5F5F7] text-[#1D1D1F] rounded-bl-md"
+                    )}>
+                      {m.text}
+                    </div>
+                  </motion.div>
+                ))}
+
+                {/* Intelligent Reasoning State */}
+                {isProcessing && (
+                  <motion.div 
+                    initial={{ opacity: 0 }} 
+                    animate={{ opacity: 1 }} 
+                    className="flex flex-col gap-3 px-1"
+                  >
+                    <div className="flex items-center gap-3">
+                      <WicIcon className="w-7 h-7 text-[#F1622C] animate-pulse" />
+                      <span className="text-[14px] text-[#1D1D1F] font-semibold tracking-tight">WIC is reasoning</span>
+                    </div>
+                    <div className="space-y-1.5 pl-10">
+                      {REASONING_STEPS.map((step, idx) => (
+                        <motion.div 
+                          key={idx}
+                          initial={{ opacity: 0, x: -10 }}
+                          animate={{ opacity: idx <= reasoningIndex ? 1 : 0.3, x: 0 }}
+                          transition={{ duration: 0.3 }}
+                          className="flex items-center gap-2 text-[12px]"
+                        >
+                          {idx < reasoningIndex ? (
+                            <Check className="w-3.5 h-3.5 text-[#287A55]" />
+                          ) : idx === reasoningIndex ? (
+                            <Loader2 className="w-3.5 h-3.5 text-[#F1622C] animate-spin" />
+                          ) : (
+                            <div className="w-3.5 h-3.5 rounded-full border border-[#E5E5EA]" />
+                          )}
+                          <span className={idx <= reasoningIndex ? "text-[#1D1D1F]" : "text-[#86868B]"}>
+                            {step}
+                          </span>
+                        </motion.div>
+                      ))}
+                    </div>
+                  </motion.div>
                 )}
-                <div className="p-4 space-y-3">
-                  {messages.map((m, i) => (
-                    <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-                      <div className={`max-w-[85%] px-3.5 py-2.5 rounded-2xl text-[13px] leading-relaxed ${
-                        m.role === "user" ? "bg-[#F1622C] text-white rounded-br-md" :
-                        m.role === "success" ? "bg-[#287A55]/20 text-[#8FD0AE] border border-[#287A55]/40" :
-                        "bg-white/10 text-[#EDE7DC] rounded-bl-md"
-                      }`}>
-                        {m.text}
+
+                {/* Secure Draft Confirmation Card (Apple-like Design) */}
+                {draft && !isProcessing && (
+                  <motion.div
+                    initial={{ y: 10, opacity: 0 }} 
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                    className="bg-[#F5F5F7] rounded-[24px] border border-[#E5E5EA] shadow-sm overflow-hidden my-1"
+                  >
+                    {/* Header */}
+                    <div className="px-5 pt-5 pb-3 flex items-center gap-3.5 bg-white rounded-t-[24px]">
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: meta.soft }}>
+                        <ActionIcon className="w-5 h-5" style={{ color: meta.accent }} />
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-[#86868B] uppercase tracking-wider block mb-0.5">{meta.verb}</span>
+                        <span className="text-[14px] font-bold text-[#1D1D1F] tracking-tight">Pending Confirmation</span>
                       </div>
                     </div>
-                  ))}
 
-                  {/* WIC thinking — the three dancing dots */}
-                  {isProcessing && (
-                    <div className="flex items-center gap-2.5 px-1">
-                      <span className="text-[12px] text-[#C6BFB3] font-medium">WIC is thinking</span>
-                      <div className="flex gap-1">
-                        {[0, 150, 300].map((delay) => (
-                          <span key={delay} className="w-1.5 h-1.5 rounded-full bg-[#F1622C] animate-bounce" style={{ animationDelay: `${delay}ms` }} />
-                        ))}
+                    {/* Guardrail Warning */}
+                    {draft.requiresConfirmation && (
+                      <div className="mx-4 mt-4 px-3.5 py-2.5 rounded-xl bg-[#FFF8E1] border border-[#FFE082] flex items-start gap-2.5">
+                        <AlertTriangle className="w-3.5 h-3.5 text-[#F57F17] mt-0.5 flex-shrink-0" />
+                        <p className="text-[12px] text-[#1D1D1F] leading-relaxed">
+                          <span className="font-semibold text-[#F57F17]">Security Check:</span> {draft.confirmationReason}
+                        </p>
                       </div>
-                    </div>
-                  )}
+                    )}
 
-                  {/* Adaptive receipt */}
-                  {draft && (
-                    <motion.div
-                      initial={{ y: 12, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
-                      className="rounded-2xl border bg-[#2A2418] overflow-hidden"
-                      style={{ borderColor: draft.requiresConfirmation ? "#B98A2E" : `${meta.accent}66` }}
-                    >
-                      <div className="px-4 py-3 border-b border-white/10 flex items-center gap-2.5" style={{ backgroundColor: meta.soft }}>
-                        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: meta.accent }}>
-                          <ActionIcon className="w-4 h-4 text-white" />
+                    {/* Transaction Details */}
+                    <div className="px-5 pb-5 pt-4">
+                      {draft.actionType === "executeConversionAndPayment" ? (
+                        // CONVERSION LAYOUT
+                        <div className="flex items-center gap-2 my-2">
+                          <div className="flex-1 bg-white rounded-2xl p-4 text-center shadow-sm border border-[#E5E5EA]">
+                            <p className="text-[9px] font-bold text-[#86868B] uppercase tracking-wider mb-1.5">You Send</p>
+                            <p className="text-[17px] font-bold text-[#1D1D1F] tracking-tight">{formatCurrency(p.amount, p.fromCurrency)}</p>
+                          </div>
+                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[#F1622C] flex items-center justify-center shadow-sm z-10">
+                            <ArrowRight className="w-4 h-4 text-white" />
+                          </div>
+                          <div className="flex-1 bg-white rounded-2xl p-4 text-center shadow-sm border border-[#E5E5EA]">
+                            <p className="text-[9px] font-bold text-[#86868B] uppercase tracking-wider mb-1.5">You Get</p>
+                            {isRateMissing ? (
+                              <p className="text-[12px] font-semibold text-[#F57F17] flex items-center justify-center gap-1">
+                                <Loader2 className="w-3 h-3 animate-spin" /> Calculating...
+                              </p>
+                            ) : (
+                              <p className="text-[17px] font-bold text-[#1D1D1F] tracking-tight">{formatCurrency(p.amount * p.rate, p.toCurrency)}</p>
+                            )}
+                          </div>
                         </div>
-                        <span className="text-[13px] font-bold text-white">{meta.verb}…</span>
-                      </div>
+                      ) : (
+                        // SEND MONEY LAYOUT
+                        <div className="flex flex-col items-center py-2 bg-white rounded-2xl border border-[#E5E5EA] shadow-sm">
+                          <p className="text-[10px] font-bold text-[#86868B] uppercase tracking-wider mb-1 mt-2">You're sending</p>
+                          <p className="text-[22px] font-bold text-[#1D1D1F] tracking-tight mb-4">{formatCurrency(p.amount, p.currency || "USD")}</p>
+                          
+                          <div className="w-px h-4 bg-[#E5E5EA] mb-4" />
+                          
+                          <p className="text-[10px] font-bold text-[#86868B] uppercase tracking-wider mb-2">To</p>
+                          <div className="flex items-center gap-3 mb-4">
+                            <div className="w-9 h-9 rounded-full bg-[#F1622C]/10 flex items-center justify-center text-[#F1622C] font-bold text-[13px]">
+                              {p.recipient ? p.recipient.charAt(0).toUpperCase() : '?'}
+                            </div>
+                            <span className="text-[14px] font-semibold text-[#1D1D1F]">{p.recipient || 'Unknown'}</span>
+                          </div>
 
-                      {draft.requiresConfirmation && (
-                        <div className="px-4 py-3 bg-[#B98A2E]/15 border-b border-[#B98A2E]/30 flex items-start gap-2.5">
-                          <AlertTriangle className="w-4 h-4 text-[#B98A2E] mt-0.5 flex-shrink-0" />
-                          <p className="text-[12px] text-[#EFE9DD] leading-relaxed">
-                            <span className="text-white font-bold">Heads up:</span> {draft.confirmationReason}
-                          </p>
+                          {/* Clean Details Rows */}
+                          <div className="w-full px-4 pb-4 space-y-1.5">
+                            {p.rail && p.rail !== "Auto" && (
+                              <div className="flex justify-between items-center px-3 py-2 bg-[#F5F5F7] rounded-lg">
+                                <span className="text-[11px] text-[#86868B]">Rail</span>
+                                <span className="text-[12px] font-semibold text-[#1D1D1F]">{p.rail}</span>
+                              </div>
+                            )}
+                            {p.description && (
+                              <div className="flex justify-between items-center px-3 py-2 bg-[#F5F5F7] rounded-lg">
+                                <span className="text-[11px] text-[#86868B]">Note</span>
+                                <span className="text-[12px] font-semibold text-[#1D1D1F] text-right max-w-[60%] truncate">{p.description}</span>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       )}
+                    </div>
 
-                      <div className="p-4 space-y-2.5">
-                        {isConvert ? (
-                          <div className="flex items-center gap-3 text-[13px] text-[#EDE7DC]">
-                            <span className="font-mono font-bold">{fmtMoney(p.amount, p.fromCurrency)}</span>
-                            <ArrowRight className="w-4 h-4 text-[#9C9488]" />
-                            <span className="font-mono font-bold" style={{ color: meta.accent }}>{fmtMoney(p.amount * (p.rate || 1), p.toCurrency)}</span>
-                          </div>
-                        ) : (
-                          payloadEntries.map(([key, val]) => (
-                            <div key={key} className="flex justify-between items-center gap-4 text-[12.5px]">
-                              <span className="text-[#9C9488] capitalize">{prettyKey(key)}</span>
-                              <span className="font-mono font-semibold text-white text-right">
-                                {key.toLowerCase().includes("amount") ? fmtMoney(val, p.currency) : String(val)}
-                              </span>
-                            </div>
-                          ))
-                        )}
-                      </div>
+                    {/* Action Buttons */}
+                    <div className="px-5 pb-5 pt-1 flex gap-2.5">
+                      <button 
+                        onClick={() => { setDraft(null); setMessages(prev => [...prev, { role: "assistant", text: "Cancelled. What else can I help with?" }]); }} 
+                        disabled={isExecuting}
+                        className="flex-1 py-3.5 rounded-xl text-[13px] font-semibold text-[#0071E3] bg-white hover:bg-[#F5F5F7] border border-[#E5E5EA] transition-colors disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                      <button 
+                        onClick={handleExecute} 
+                        disabled={isExecuting}
+                        className="flex-[2] py-3.5 rounded-xl text-[13px] font-semibold text-white flex items-center justify-center gap-2 transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                        style={{ backgroundColor: draft.requiresConfirmation ? "#F57F17" : meta.accent }}
+                      >
+                        {isExecuting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                        {draft.requiresConfirmation ? "Yes, I'm Sure" : meta.cta}
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-                      <div className="px-4 py-3 bg-black/20 flex items-center gap-2">
-                        <button onClick={handleCancel} disabled={isExecuting}
-                          className="flex-1 py-2.5 rounded-xl text-[12.5px] font-bold text-[#EDE7DC] bg-white/5 hover:bg-white/10 transition-colors disabled:opacity-50">
-                          Cancel
-                        </button>
-                        <button onClick={handleExecute} disabled={isExecuting}
-                          className="flex-[2] py-2.5 rounded-xl text-[12.5px] font-bold text-white flex items-center justify-center gap-2 transition-all disabled:opacity-60"
-                          style={{ backgroundColor: draft.requiresConfirmation ? "#B98A2E" : meta.accent }}
-                        >
-                          {isExecuting ? <Loader2 className="w-4 h-4 animate-spin" /> : (draft.requiresConfirmation ? <AlertTriangle className="w-4 h-4" /> : <ActionIcon className="w-4 h-4" />)}
-                          {draft.requiresConfirmation ? "Yes, I'm sure" : meta.cta}
-                        </button>
-                      </div>
-                    </motion.div>
-                  )}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Input */}
-          <div className="p-3 flex items-end gap-2">
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onFocus={handleFocus}
-              onBlur={handleBlur}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask WIC… (e.g. 'Send 50 USD to John')"
-              rows={1}
-              className="flex-1 bg-transparent border-none outline-none resize-none text-[14px] text-[#F5EFE6] placeholder:text-[#9C9488] py-2.5 px-3 leading-relaxed"
-            />
-            <button
-              onClick={() => handleAiRequest()}
-              disabled={!input.trim() || isProcessing}
-              className="w-10 h-10 rounded-xl bg-[#F1622C] flex items-center justify-center text-white hover:bg-[#E0531C] transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
-            >
-              {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            </button>
+        {/* Input Area */}
+        <div className="flex items-end gap-3 p-4 bg-white">
+          <div className="pb-2 flex-shrink-0">
+            <WicIcon className="w-8 h-8 text-[#F1622C]" />
           </div>
-
-          {/* Toast */}
-          <AnimatePresence>
-            {toastMsg && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
-                className="border-t border-white/10 px-4 py-3 flex items-start gap-2.5"
-              >
-                <div className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${toastMsg.type === "error" ? "bg-[#A84B3D]/25" : "bg-[#287A55]/20"}`}>
-                  {toastMsg.type === "error" ? <AlertTriangle className="w-3.5 h-3.5 text-[#E0A196]" /> : <Check className="w-3.5 h-3.5 text-[#7BC49A]" strokeWidth={3} />}
-                </div>
-                <p className={`flex-1 text-[13px] leading-relaxed ${toastMsg.type === "error" ? "text-[#E7BFB4]" : "text-[#A7D4B8]"}`}>
-                  {toastMsg.text}
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.div>
-
-        <div className="hidden md:block mt-2 text-[9px] text-[#9C9488]">
-          <span className="border border-white/15 bg-white/5 rounded px-1.5 py-0.5 text-[8px] text-[#C6BFB3]">⌘ K</span> to talk to WIC
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
+            placeholder="Ask WIC... (e.g., 'Send 50 USD to John')"
+            rows={1}
+            className="flex-1 bg-transparent border-none outline-none resize-none text-[15px] text-[#1D1D1F] placeholder:text-[#86868B] py-2 leading-relaxed max-h-[120px] font-medium tracking-tight"
+          />
+          <button
+            onClick={() => handleAiRequest()}
+            disabled={!input.trim() || isProcessing}
+            className="w-10 h-10 rounded-xl bg-[#F1622C] flex items-center justify-center text-white hover:bg-[#D4511E] transition-all disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0 shadow-sm mb-0.5"
+          >
+            {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+          </button>
         </div>
-      </div>
-    </div>
+
+        {/* Toast Notifications */}
+        <AnimatePresence>
+          {toastMsg && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }}
+              className="border-t border-[#E5E5EA] px-5 py-3.5 flex items-start gap-3 bg-[#FAFAFA]"
+            >
+              <div className={"shrink-0 w-6 h-6 rounded-full flex items-center justify-center " + (toastMsg.type === "error" ? "bg-[#FEE2E2]" : "bg-[#E7F2EC]")}>
+                {toastMsg.type === "error" ? <AlertTriangle className="w-3.5 h-3.5 text-[#DC2626]" /> : <Check className="w-3.5 h-3.5 text-[#287A55]" strokeWidth={3} />}
+              </div>
+              <p className={"flex-1 text-[13px] leading-relaxed font-medium " + (toastMsg.type === "error" ? "text-[#DC2626]" : "text-[#287A55]")}>
+                {toastMsg.text}
+              </p>
+              <button onClick={() => setToastMsg(null)} className="text-[#86868B] hover:text-[#1D1D1F] transition-colors">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </>
   );
 }

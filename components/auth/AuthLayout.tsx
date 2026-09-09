@@ -41,7 +41,6 @@ export default function AuthLayout({ title, subtitle, children }: { title: strin
   const [rates, setRates] = useState(baseRates.map((r) => ({ ...r, value: r.base, up: true, flash: false })));
   const [routeIndex, setRouteIndex] = useState(0);
 
-  // Live ticker: rates drift every ~2.2s
   useEffect(() => {
     const t = setInterval(() => {
       setRates((prev) =>
@@ -55,7 +54,6 @@ export default function AuthLayout({ title, subtitle, children }: { title: strin
     return () => clearInterval(t);
   }, []);
 
-  // Rotating settlement feed
   useEffect(() => {
     const t = setInterval(() => setRouteIndex((i) => (i + 1) % routes.length), 3000);
     return () => clearInterval(t);
@@ -69,10 +67,15 @@ export default function AuthLayout({ title, subtitle, children }: { title: strin
         @keyframes ww-drift-a { 0%,100% { transform: translate(0,0);} 50% { transform: translate(40px,30px);} }
         @keyframes ww-drift-b { 0%,100% { transform: translate(0,0);} 50% { transform: translate(-30px,-40px);} }
         @keyframes ww-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .ww-form-scroll::-webkit-scrollbar { width: 8px; }
+        .ww-form-scroll::-webkit-scrollbar-track { background: transparent; }
+        .ww-form-scroll::-webkit-scrollbar-thumb { background: #EAE6DF; border-radius: 999px; }
+        .ww-form-scroll::-webkit-scrollbar-thumb:hover { background: #D6D0C6; }
       `}</style>
 
-      {/* ===== Brand panel (left) ===== */}
-      <div className="hidden lg:flex flex-col justify-between w-[52%] bg-[#0E1116] relative overflow-hidden p-12">
+      {/* ===== Brand panel (left) — pinned, never scrolls ===== */}
+       <div className="hidden lg:flex lg:fixed lg:inset-y-0 lg:left-0 flex-col justify-between w-[52%] shrink-0 bg-[#0E1116] relative overflow-hidden p-12">
+
         {/* Drifting ambient glows */}
         <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-[#F1622C]/15 rounded-full blur-[140px] pointer-events-none" style={{ animation: "ww-drift-a 12s ease-in-out infinite" }} />
         <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] bg-[#4C5C88]/25 rounded-full blur-[120px] pointer-events-none" style={{ animation: "ww-drift-b 14s ease-in-out infinite" }} />
@@ -162,22 +165,25 @@ export default function AuthLayout({ title, subtitle, children }: { title: strin
         </div>
       </div>
 
-      {/* ===== Form panel (right) ===== */}
-      <div className="flex-1 flex flex-col justify-center px-6 py-12 sm:px-16 lg:px-24 relative">
-        <div className="absolute top-[-15%] right-[-10%] w-[400px] h-[400px] bg-[#F1622C]/8 rounded-full blur-[100px] pointer-events-none" />
+      {/* ===== Form panel (right) — the sole scrollable column ===== */}
+        <div className="flex-1 min-h-screen ww-form-scroll lg:ml-[52%]">
 
-        {/* Mobile brand header */}
-        <div className="lg:hidden flex items-center gap-2.5 mb-10 justify-center">
-          <div className="w-9 h-9 rounded-xl bg-[#F1622C] flex items-center justify-center">
-            <BrandMark className="w-4 h-4" />
+        <div className="relative flex flex-col justify-center px-6 py-14 sm:px-16 lg:px-24 min-h-screen">
+          <div className="absolute top-[-15%] right-[-10%] w-[400px] h-[400px] bg-[#F1622C]/8 rounded-full blur-[100px] pointer-events-none" />
+
+          {/* Mobile brand header */}
+          <div className="lg:hidden flex items-center gap-2.5 mb-10 justify-center">
+            <div className="w-9 h-9 rounded-xl bg-[#F1622C] flex items-center justify-center">
+              <BrandMark className="w-4 h-4" />
+            </div>
+            <span className="text-[#18140F] text-[17px] font-semibold tracking-tight">Wireways</span>
           </div>
-          <span className="text-[#18140F] text-[17px] font-semibold tracking-tight">Wireways</span>
-        </div>
 
-        <div className="max-w-[420px] w-full mx-auto relative">
-          <h2 className="text-[28px] font-semibold text-[#18140F] tracking-tight">{title}</h2>
-          <p className="text-[14px] text-[#8C8579] mt-1.5">{subtitle}</p>
-          <div className="mt-8">{children}</div>
+          <div className="max-w-[420px] w-full mx-auto relative">
+            <h2 className="text-[28px] font-semibold text-[#18140F] tracking-tight">{title}</h2>
+            <p className="text-[14px] text-[#8C8579] mt-1.5">{subtitle}</p>
+            <div className="mt-8">{children}</div>
+          </div>
         </div>
       </div>
     </main>

@@ -24,10 +24,10 @@ export default async function WalletDetailPage({ params }: { params: Promise<{ c
   const { currency } = await params;
   
   // Multi-tenant: MUST filter by user_id
-  const walletRes = await db.execute({
-    sql: "SELECT * FROM wallets WHERE user_id = ? AND currency = ? AND is_active = 1",
-    args: [userId, currency],
-  });
+  const walletRes = await db.execute(
+    "SELECT id, currency, balance, bank, details FROM wallets WHERE user_id = $1 AND currency = $2 AND is_active = 1",
+    [userId, currency]
+  );
 
   if (walletRes.rows.length === 0) {
     notFound();
@@ -37,10 +37,10 @@ export default async function WalletDetailPage({ params }: { params: Promise<{ c
   const style = walletStyles[currency] || walletStyles.USD;
 
   // Fetch transactions for this user AND this currency
-  const txRes = await db.execute({
-    sql: "SELECT * FROM transactions WHERE user_id = ? AND currency = ? ORDER BY id DESC LIMIT 20",
-    args: [userId, currency],
-  });
+  const txRes = await db.execute(
+    "SELECT id, name, type, amount, status, rail, created_at FROM transactions WHERE user_id = $1 AND currency = $2 ORDER BY id DESC LIMIT 20",
+    [userId, currency]
+  );
   const transactions = txRes.rows as any[];
 
   // Aggregate stats (last 30 days)
@@ -108,30 +108,6 @@ export default async function WalletDetailPage({ params }: { params: Promise<{ c
         <div className="bg-white border border-[#EAE6DF] rounded-[14px] p-4">
           <div className="text-[10.5px] font-semibold text-[#B3AC9F] uppercase tracking-wider">Transactions</div>
           <div className="font-sans text-[22px] font-semibold text-[#4C5C88] mt-1 tabular-nums">{recent.length}</div>
-        </div>
-      </div>
-
-      {/* AI whisper tailored to this currency */}
-      <div className="relative bg-[#0E1116] border border-[#2A2F3A] rounded-[20px] p-6 overflow-hidden">
-        <div className="absolute -top-16 -right-16 w-56 h-56 bg-[#F1622C]/15 rounded-full blur-[70px] pointer-events-none" />
-        <div className="relative flex items-center gap-3 mb-4">
-          <div className="w-8 h-8 rounded-lg bg-[#F1622C]/10 border border-[#F1622C]/30 flex items-center justify-center">
-            <BrainCircuit className="w-4 h-4 text-[#F1622C]" />
-          </div>
-          <div>
-            <h3 className="text-[15px] font-semibold text-white tracking-tight">Wallet Intelligence</h3>
-            <p className="text-[10.5px] text-[#8791B3] font-mono tracking-wider">{currency} ANALYSIS</p>
-          </div>
-        </div>
-        <div className="relative flex items-start gap-3 p-4 rounded-xl border border-white/5 bg-white/[0.02]">
-          <TrendingUp className="w-4 h-4 text-[#F1622C] mt-0.5" />
-          <p className="text-[12.5px] text-[#A0AABF] leading-relaxed">
-            {currency === "USD" && <>Your USD wallet holds <span className="font-semibold text-white">{formattedBalance}</span>. Consider converting 20% to EUR at current rate (0.9214) to hedge against next week's dollar softening.</>}
-            {currency === "EUR" && <>SEPA Instant latency is at 8s right now — optimal window for European payouts. You have <span className="font-semibold text-white">{formattedBalance}</span> ready to deploy.</>}
-            {currency === "GBP" && <>GBP/USD spread widened 12 bps overnight. Hold if you can wait 48 hours for a better conversion rate.</>}
-            {currency === "USDC" && <>On-chain congestion is low. USDC Polygon gas at 0.0002 — ideal for cross-border crypto payouts.</>}
-            {currency === "KES" && <>MPesa B2C latency at 42ms — best rail for instant payouts. Consider converting USD to KES now to lock today's rate (129.45).</>}
-          </p>
         </div>
       </div>
 

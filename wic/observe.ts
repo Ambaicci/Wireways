@@ -58,8 +58,8 @@ export interface TransactionSnapshot {
 
 export interface FxSnapshot {
   live: boolean;
-  usdRates: Record<string, number>; // units per 1 USD
-  eurPerUsd: number;                  // EUR received per 1 USD
+  usdRates: Record<string, number>;
+  eurPerUsd: number;
 }
 
 export interface WorldModel {
@@ -76,12 +76,13 @@ export interface WorldModel {
 
 // ─── Helpers ─────────────────────────────────────────────────
 function toUsd(amount: number, currency: string, usdRates: Record<string, number>): number {
-  const rate = usdRates[currency] ?? 1; // units per 1 USD
+  const rate = usdRates[currency] ?? 1;
   return rate > 0 ? amount / rate : 0;
 }
 
 function daysUntil(dateStr: string): number {
   const target = new Date(dateStr).getTime();
+  if (isNaN(target)) return 999; // Fallback for malformed dates
   return Math.max(0, Math.ceil((target - Date.now()) / 86400000));
 }
 
@@ -89,7 +90,7 @@ function daysUntil(dateStr: string): number {
 export async function observeWorld(userId: number): Promise<WorldModel> {
   // 1. Wallets
   const walletRes = await db.execute(
-    "SELECT currency, balance FROM wallets WHERE user_id = ? AND is_active = 1",
+    "SELECT currency, balance FROM wallets WHERE user_id = $1 AND is_active = 1",
     [userId]
   );
 
@@ -119,19 +120,21 @@ export async function observeWorld(userId: number): Promise<WorldModel> {
   // 3. Active wire-roll obligations
   const rollRes = await db.execute(
     `SELECT id, name, recipient, currency, amount, frequency, next_run_date, rail
-     FROM wire_rolls WHERE user_id = ? AND status = 'active'`,
+     FROM wire_rolls WHERE user_id = $1 AND status = 'active'`,
     [userId]
   );
 
-  // Batch line items (degrade gracefully if the table is absent)
+  // Batch line items
   const itemsByRoll = new Map<number, { currency: string; amount: number }[]>();
   const rollIds = rollRes.rows.map((r) => Number(r.id));
+  
   if (rollIds.length > 0) {
     try {
-      const placeholders = rollIds.map(() => "?").join(",");
+      // CRITICAL FIX: Use Postgres native ANY() operator instead of manual placeholder generation.
+      // postgres.js safely handles JS arrays passed as parameters.
       const itemRes = await db.execute(
-        `SELECT roll_id, currency, amount FROM wire_roll_items WHERE roll_id IN (${placeholders})`,
-        rollIds
+        `SELECT roll_id, currency, amount FROM wire_roll_items WHERE roll_id = ANY($1)`,
+        [rollIds]
       );
       for (const row of itemRes.rows) {
         const rid = Number(row.roll_id);
@@ -139,7 +142,7 @@ export async function observeWorld(userId: number): Promise<WorldModel> {
         itemsByRoll.get(rid)!.push({ currency: row.currency as string, amount: Number(row.amount) || 0 });
       }
     } catch {
-      /* wire_roll_items not present — single-recipient rolls only */
+      /* wire_roll_items not present or empty — single-recipient rolls only */
     }
   }
 
@@ -185,13 +188,17 @@ export async function observeWorld(userId: number): Promise<WorldModel> {
     };
   });
 
-  // 4. Recent movement (last 30 days)
+  // 4. Recent movement (last 30 days, capped at 200 for token efficiency)
   const cutoff = new Date(Date.now() - 30 * 86400000).toISOString();
   const txRes = await db.execute(
     `SELECT id, name, type, amount, status, rail, currency, created_at
-     FROM transactions WHERE user_id = ? AND created_at >= ? ORDER BY id DESC LIMIT 200`,
+     FROM transactions 
+     WHERE user_id = $1 AND created_at >= $2 
+     ORDER BY created_at DESC, id DESC 
+     LIMIT 200`,
     [userId, cutoff]
   );
+  
   const transactions: TransactionSnapshot[] = txRes.rows.map((r) => ({
     id: Number(r.id),
     name: r.name as string,
@@ -209,12 +216,12 @@ export async function observeWorld(userId: number): Promise<WorldModel> {
     .reduce((sum, t) => sum + toUsd(t.amount, t.currency, usdRates), 0);
   const avgDailyOutflowUsd = totalOutflowUsd / 30;
 
-  // 6. Liquidity runway (capped for sanity, 0 if empty world)
+  // 6. Liquidity runway (capped at 90 days for sanity, 0 if empty world)
   let liquidityDays: number;
   if (totalUsd <= 0) {
-    liquidityDays = 0; // Empty world has no runway
+    liquidityDays = 0;
   } else if (avgDailyOutflowUsd <= 0) {
-    liquidityDays = 90; // Has money, no spending pressure observed
+    liquidityDays = 90;
   } else {
     liquidityDays = Math.min(90, Math.floor(totalUsd / avgDailyOutflowUsd));
   }

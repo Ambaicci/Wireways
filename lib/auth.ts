@@ -2,37 +2,78 @@ import "server-only";
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { db } from "@/lib/db";
+import { AuthenticationError } from "@/lib/errors";
+import bcrypt from "bcryptjs";
 
-const secretKey = process.env.SESSION_SECRET || "wireways-super-secret-key-do-not-share";
-const key = new TextEncoder().encode(secretKey);
+// ─── Configuration ─────────────────────────────────────────────
+const SESSION_SECRET = process.env.SESSION_SECRET;
+if (!SESSION_SECRET) {
+  throw new Error("❌ SESSION_SECRET environment variable is required");
+}
+const secretKey = new TextEncoder().encode(SESSION_SECRET);
 
+// Fintech Best Practice: Shorter absolute session duration (24 hours)
+// Consider implementing a "remember me" or sliding session later if needed.
+const SESSION_DURATION = 24 * 60 * 60 * 1000; // 24 hours
+
+// ─── Password Policy ───────────────────────────────────────────
+// Added special character requirement (?=.*[!@#$%^&*])
+export const passwordPolicy = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/;
+
+export function validatePassword(password: string): boolean {
+  return passwordPolicy.test(password);
+}
+
+// ─── Session Helpers ───────────────────────────────────────────
 export async function encrypt(payload: any) {
   return await new SignJWT(payload)
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("7d")
-    .sign(key);
+    .setExpirationTime("24h")
+    .sign(secretKey);
 }
 
 export async function decrypt(input: string): Promise<any> {
-  const { payload } = await jwtVerify(input, key, {
-    algorithms: ["HS256"],
-  });
-  return payload;
+  try {
+    const { payload } = await jwtVerify(input, secretKey, {
+      algorithms: ["HS256"],
+    });
+    return payload;
+  } catch {
+    throw new AuthenticationError("Invalid or expired session");
+  }
 }
 
-export async function createSession(userId: number) {
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-  const session = await encrypt({ sub: userId, exp: expiresAt.getTime() });  
-  const cookieStore = await cookies();
+// ─── Password Helpers ──────────────────────────────────────────
+export async function hashPassword(password: string): Promise<string> {
+  // Note: bcryptjs is pure JS and slower. Consider native 'bcrypt' or 'argon2' for production.
+  return await bcrypt.hash(password, 10);
+}
 
-  cookieStore.set("session", session, {
+export async function verifyPassword(
+  password: string,
+  hashed: string
+): Promise<boolean> {
+  return await bcrypt.compare(password, hashed);
+}
+
+// ─── Session Management ────────────────────────────────────────
+export async function createSession(userId: number) {
+  const expiresAt = new Date(Date.now() + SESSION_DURATION);
+  const session = await encrypt({ sub: userId, exp: expiresAt.getTime() });
+
+  const cookieOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     expires: expiresAt,
-    sameSite: "lax",
+    sameSite: "strict" as const, // CRITICAL: Prevents CSRF attacks
     path: "/",
-  });
+  };
+
+  const cookieStore = await cookies();
+  cookieStore.set("session", session, cookieOptions);
+
+  return { userId, expiresAt };
 }
 
 export async function verifySession() {
@@ -43,33 +84,27 @@ export async function verifySession() {
   try {
     const decoded = await decrypt(cookie);
     if (!decoded?.sub) return null;
-    const userId = Number(decoded.sub);
 
-    // GHOST BUSTER: Check if the user actually exists in the database
-    const check = await db.execute("SELECT id FROM users WHERE id = ?", [userId]);
-    if (check.rows.length === 0) {
-      // Ghost session! User doesn't exist in the new DB.
-      // (Cookies can't be deleted during rendering — returning null
-      // ignores the ghost; the next login overwrites it.)
-      return null;
-    }
+    const userId = Number(decoded.sub);
+    if (isNaN(userId) || userId <= 0) return null;
+
+    // Verify user still exists and is active (add 'status = active' if you have that column)
+    const result = await db.query`SELECT id FROM users WHERE id = ${userId}`;
+    if (result.rows.length === 0) return null;
 
     return { userId };
-  } catch (error) {
-    console.error("Failed to verify session", error);
+  } catch {
     return null;
   }
 }
 
 export async function deleteSession() {
   const cookieStore = await cookies();
-  // Overwrite the cookie with an expired date to force the browser to drop it
-  cookieStore.set("session", "", {
+  // CRITICAL: Must match creation options to ensure the browser actually deletes it
+  cookieStore.delete("session", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
-    expires: new Date(0), // January 1, 1970
-    maxAge: 0,
-    sameSite: "lax",
+    sameSite: "strict",
     path: "/",
   });
 }

@@ -2,10 +2,22 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { CreditCard, Smartphone, Lock, CheckCircle2, ShieldCheck, AlertTriangle } from "lucide-react";
+import { CreditCard, Smartphone, Lock, CheckCircle2, ShieldCheck, AlertTriangle, Building2, User } from "lucide-react";
 import { payPaymentLink } from "@/lib/actions";
+import { formatCurrency } from "@/lib/constants";
 
-// The serious Wireways brand mark (radiating network node)
+// Browser-compatible UUID generator for idempotency
+function generateUUID() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 function BrandMark({ className = "w-5 h-5" }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -20,6 +32,8 @@ interface PayLink {
   currency: string;
   status: string;
   description: string;
+  merchantName: string;
+  merchantCompany: string | null;
 }
 
 export default function PaymentCheckout({ link }: { link: PayLink }) {
@@ -33,11 +47,12 @@ export default function PaymentCheckout({ link }: { link: PayLink }) {
   const [paid, setPaid] = useState(false);
   const [error, setError] = useState("");
 
-  const formatAmount = (amount: number, currency: string) => {
-    if (currency === 'USDC') return `${amount.toLocaleString()} USDC`;
-    if (currency === 'KES') return `KSh ${amount.toLocaleString()}`;
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
-  };
+  // CRITICAL: Generate a unique session ID on mount for idempotency
+  const [checkoutSessionId] = useState(() => generateUUID());
+
+  // Use centralized, deterministic formatting
+  const displayAmount = formatCurrency(link.amount, link.currency);
+  const payeeName = link.merchantCompany || link.merchantName || "Merchant";
 
   const formatCard = (v: string) =>
     v.replace(/\D/g, "").slice(0, 16).replace(/(.{4})/g, "$1 ").trim();
@@ -47,40 +62,37 @@ export default function PaymentCheckout({ link }: { link: PayLink }) {
     return d.length > 2 ? d.slice(0, 2) + "/" + d.slice(2) : d;
   };
 
+  // Client-side validation to prevent unnecessary backend calls
+  const isCardValid = cardNumber.replace(/\s/g, "").length >= 15 && expiry.length === 5 && cvc.length >= 3;
+  const isMpesaValid = phone.replace(/\s/g, "").length >= 10;
+  const isFormValid = method === "card" ? (isCardValid && payerName.trim().length > 0) : isMpesaValid;
+
   const handlePay = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    setIsProcessing(true);
 
-    await new Promise((r) => setTimeout(r, 1200));
+    if (!isFormValid) {
+      setError("Please fill in all required fields correctly.");
+      return;
+    }
+
+    setIsProcessing(true);
 
     const result = await payPaymentLink({
       linkId: link.id,
       payerName: method === "card" ? payerName : phone,
       method: method === "card" ? "Card" : "M-Pesa",
+      idempotencyKey: checkoutSessionId, // CRITICAL: Prevents double-charging on refresh
     });
 
     setIsProcessing(false);
+    
     if (result.success) {
       setPaid(true);
     } else {
-      setError(result.message || "Payment failed.");
+      setError(result.message || "Payment failed. Please try again.");
     }
   };
-
-  if (link.status !== "Active" && !paid) {
-    return (
-      <main className="min-h-screen bg-[#F6F5F3] flex items-center justify-center p-6">
-        <div className="text-center bg-white border border-[#EAE6DF] rounded-3xl p-10 shadow-xl max-w-[420px] w-full">
-          <div className="w-16 h-16 mx-auto bg-[#FBF1DA] rounded-full flex items-center justify-center mb-5">
-            <AlertTriangle className="w-8 h-8 text-[#9C6B08]" />
-          </div>
-          <h1 className="text-xl font-semibold text-[#18140F] tracking-tight">Link no longer active</h1>
-          <p className="text-sm text-[#8C8579] mt-2">This payment link has already been paid or was deactivated by the merchant.</p>
-        </div>
-      </main>
-    );
-  }
 
   if (paid) {
     return (
@@ -96,11 +108,11 @@ export default function PaymentCheckout({ link }: { link: PayLink }) {
             transition={{ type: "spring", stiffness: 300, damping: 18, delay: 0.1 }}
             className="w-16 h-16 mx-auto bg-[#E7F5EC] rounded-full flex items-center justify-center mb-5"
           >
-            <CheckCircle2 className="w-8 h-8 text-[#17824A]" />
+            <CheckCircle2 className="w-8 h-8 text-[#287A55]" />
           </motion.div>
           <h1 className="text-xl font-semibold text-[#18140F] tracking-tight">Payment successful</h1>
           <p className="text-sm text-[#8C8579] mt-2">
-            {formatAmount(link.amount, link.currency)} has been sent to the merchant.
+            {displayAmount} has been securely sent to {payeeName}.
           </p>
           <p className="mt-6 text-[11px] text-[#B3AC9F]">A receipt has been generated • Powered by Wireways</p>
         </motion.div>
@@ -125,12 +137,16 @@ export default function PaymentCheckout({ link }: { link: PayLink }) {
 
       <div className="w-full max-w-[420px] relative">
         <div className="bg-white border border-[#EAE6DF] rounded-t-3xl p-6 text-center shadow-sm">
-          <p className="text-[13px] text-[#8C8579] mb-1">{link.description || "Payment"}</p>
-          <div className="text-[40px] font-semibold tracking-tight text-[#18140F] tabular-nums">
-            {formatAmount(link.amount, link.currency)}
+          <div className="flex items-center justify-center gap-1.5 mb-1 text-[#8C8579]">
+            {link.merchantCompany ? <Building2 className="w-3.5 h-3.5" /> : <User className="w-3.5 h-3.5" />}
+            <span className="text-[13px] font-medium">Pay {payeeName}</span>
           </div>
-          <div className="flex items-center justify-center gap-1.5 mt-2 text-[11px] text-[#8C8579]">
-            <ShieldCheck className="w-3.5 h-3.5 text-[#17824A]" />
+          <p className="text-[12px] text-[#B3AC9F] mb-2">{link.description || "Payment Request"}</p>
+          <div className="text-[40px] font-semibold tracking-tight text-[#18140F] tabular-nums">
+            {displayAmount}
+          </div>
+          <div className="flex items-center justify-center gap-1.5 mt-3 text-[11px] text-[#8C8579]">
+            <ShieldCheck className="w-3.5 h-3.5 text-[#287A55]" />
             Protected by Wireways Idempotent Execution
           </div>
         </div>
@@ -164,6 +180,7 @@ export default function PaymentCheckout({ link }: { link: PayLink }) {
                 <input
                   type="text"
                   required
+                  autoComplete="cc-name"
                   value={payerName}
                   onChange={(e) => setPayerName(e.target.value)}
                   placeholder="Jane Doe"
@@ -176,6 +193,7 @@ export default function PaymentCheckout({ link }: { link: PayLink }) {
                   type="text"
                   required
                   inputMode="numeric"
+                  autoComplete="cc-number"
                   value={cardNumber}
                   onChange={(e) => setCardNumber(formatCard(e.target.value))}
                   placeholder="4242 4242 4242 4242"
@@ -189,6 +207,7 @@ export default function PaymentCheckout({ link }: { link: PayLink }) {
                     type="text"
                     required
                     inputMode="numeric"
+                    autoComplete="cc-exp"
                     value={expiry}
                     onChange={(e) => setExpiry(formatExpiry(e.target.value))}
                     placeholder="MM/YY"
@@ -201,6 +220,7 @@ export default function PaymentCheckout({ link }: { link: PayLink }) {
                     type="text"
                     required
                     inputMode="numeric"
+                    autoComplete="cc-csc"
                     value={cvc}
                     onChange={(e) => setCvc(e.target.value.replace(/\D/g, "").slice(0, 4))}
                     placeholder="123"
@@ -215,6 +235,7 @@ export default function PaymentCheckout({ link }: { link: PayLink }) {
               <input
                 type="tel"
                 required
+                autoComplete="tel"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value.replace(/[^\d+\s]/g, "").slice(0, 16))}
                 placeholder="0712 345 678"
@@ -225,22 +246,25 @@ export default function PaymentCheckout({ link }: { link: PayLink }) {
           )}
 
           {error && (
-            <div className="text-[12px] text-[#B91C1C] bg-red-50 border border-red-100 rounded-xl p-3">{error}</div>
+            <div className="text-[12px] text-[#C53030] bg-[#C53030]/5 border border-[#C53030]/20 rounded-xl p-3 flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              {error}
+            </div>
           )}
 
           <button
             type="submit"
-            disabled={isProcessing}
-            className="w-full bg-[#F1622C] text-white py-3.5 rounded-xl text-[14px] font-semibold hover:bg-[#C94A1D] transition-all disabled:opacity-60 shadow-lg shadow-[#F1622C]/25 flex items-center justify-center gap-2"
+            disabled={isProcessing || !isFormValid}
+            className="w-full bg-[#F1622C] text-white py-3.5 rounded-xl text-[14px] font-semibold hover:bg-[#D4511E] transition-all disabled:opacity-60 disabled:cursor-not-allowed shadow-lg shadow-[#F1622C]/25 flex items-center justify-center gap-2"
           >
             {isProcessing ? (
               <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-white" style={{ animation: "ww-blink 1.2s infinite", animationDelay: "0ms" }} />
-                <span className="w-2 h-2 rounded-full bg-white" style={{ animation: "ww-blink 1.2s infinite", animationDelay: "200ms" }} />
-                <span className="w-2 h-2 rounded-full bg-white" style={{ animation: "ww-blink 1.2s infinite", animationDelay: "400ms" }} />
+                <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                <span className="w-2 h-2 rounded-full bg-white animate-pulse delay-100" />
+                <span className="w-2 h-2 rounded-full bg-white animate-pulse delay-200" />
               </span>
             ) : (
-              `Pay ${formatAmount(link.amount, link.currency)}`
+              `Pay ${displayAmount}`
             )}
           </button>
 
@@ -251,10 +275,6 @@ export default function PaymentCheckout({ link }: { link: PayLink }) {
       </div>
 
       <p className="mt-8 text-[11px] text-[#B3AC9F] relative">Powered by Wireways • AI Smart Routing</p>
-
-      <style>{`
-        @keyframes ww-blink { 0%, 80%, 100% { opacity: 0.25; transform: scale(0.85); } 40% { opacity: 1; transform: scale(1); } }
-      `}</style>
     </main>
   );
 }

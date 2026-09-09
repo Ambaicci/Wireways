@@ -8,29 +8,48 @@ const inter = Inter({ subsets: ["latin"] });
 const space = Space_Grotesk({ subsets: ["latin"], weight: ["500", "600", "700"] });
 const plex = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500", "600"] });
 
-const baseRates = [
-  { pair: "USD / KES", base: 129.45, decimals: 2 },
-  { pair: "EUR / USD", base: 1.0892, decimals: 4 },
-  { pair: "GBP / USD", base: 1.2704, decimals: 4 },
-  { pair: "USD / USDC", base: 1.0001, decimals: 4 },
-];
+interface Rate {
+  pair: string;
+  value: number;
+  decimals: number;
+  up: boolean;
+}
 
 export default function LandingPage() {
-  const [rates, setRates] = useState(() => baseRates.map((r) => ({ ...r, value: r.base, up: true })));
+  const [rates, setRates] = useState<Rate[]>([
+    { pair: "USD / KES", value: 0, decimals: 2, up: true },
+    { pair: "EUR / USD", value: 0, decimals: 4, up: true },
+    { pair: "GBP / USD", value: 0, decimals: 4, up: true },
+    { pair: "USD / USDC", value: 0, decimals: 4, up: true },
+  ]);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("marketplaces");
 
+  // ─── Fetch live rates ──────────────────────────────────────────
   useEffect(() => {
-    const interval = setInterval(() => {
-      setRates((prev) =>
-        prev.map((r) => {
-          const delta = (Math.random() - 0.5) * 0.002 * r.base;
-          return { ...r, value: r.base + delta, up: delta >= 0 };
-        })
-      );
-    }, 2200);
-    return () => clearInterval(interval);
+    async function fetchRates() {
+      try {
+        const res = await fetch("/api/fx");
+        const data = await res.json();
+        if (data.success) {
+          const { rates } = data;
+          setRates([
+            { pair: "USD / KES", value: rates.KES || 130, decimals: 2, up: true },
+            { pair: "EUR / USD", value: rates.EUR || 0.92, decimals: 4, up: true },
+            { pair: "GBP / USD", value: rates.GBP || 0.79, decimals: 4, up: true },
+            { pair: "USD / USDC", value: rates.USDC || 1, decimals: 4, up: true },
+          ]);
+        }
+      } catch (error) {
+        console.error("Failed to fetch FX rates:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchRates();
   }, []);
 
+  // ─── Intersection Observer for animations ─────────────────────
   useEffect(() => {
     const revealEls = document.querySelectorAll(".reveal");
     const io = new IntersectionObserver(
@@ -131,6 +150,8 @@ export default function LandingPage() {
         .rate-value .v{ font-family:${plex.style.fontFamily},monospace; font-size:15.5px; transition: color .4s ease; }
         .rate-value .arrow{ font-family:${plex.style.fontFamily},monospace; font-size:10px; }
         .up{ color:var(--positive-bright); } .down{ color:#E5484D; }
+        .loading-shimmer{ animation: shimmer 1.5s infinite; background: linear-gradient(90deg, rgba(255,255,255,0.02) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.02) 75%); background-size: 200% 100%; }
+        @keyframes shimmer{ 0%{ background-position: 200% 0; } 100%{ background-position: -200% 0; } }
         @media (max-width:700px){ .rates-grid{ grid-template-columns:repeat(2,1fr); } .hero h1{ font-size:38px; } .hero-photo-frame{ height:260px; } .hero-visual{ padding-bottom:0; } .live-panel{ position:static; transform:none; width:100%; margin-top:16px; } }
 
         .logo-strip{ background:var(--dark); border-top:1px solid var(--dark-border); padding:36px 0 48px; }
@@ -313,20 +334,27 @@ export default function LandingPage() {
               <span style={{ background: "#B3AC9F" }}></span>
             </div>
             <div className="rates-grid">
-              {rates.map((r, i) => (
-                <div className="rate-card" key={i}>
-                  <div className="rate-pair">{r.pair}</div>
-                  <div className="rate-value">
-                    <span className={`v ${r.up ? "up" : "down"}`}>{r.value.toFixed(r.decimals)}</span>
-                    <span className={`arrow ${r.up ? "up" : "down"}`}>{r.up ? "▲" : "▼"}</span>
+              {loading ? (
+                // Loading skeleton
+                Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="rate-card loading-shimmer" style={{ height: "72px" }} />
+                ))
+              ) : (
+                rates.map((r, i) => (
+                  <div className="rate-card" key={i}>
+                    <div className="rate-pair">{r.pair}</div>
+                    <div className="rate-value">
+                      <span className="v">{r.value.toFixed(r.decimals)}</span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>
       </section>
 
+      {/* Rest of the page remains the same */}
       <section className="logo-strip">
         <p>Powering finance teams at</p>
         <div className="logo-row">

@@ -29,11 +29,11 @@ export default async function WalletsPage() {
   if (!session) redirect("/login");
   const userId = session.userId;
 
-  // WIC observes the world — total, liquidity, live USD equivalents
+  // Observe the world — total, liquidity, live USD equivalents
   const world = await observeWorld(userId);
 
   const result = await db.execute(
-    "SELECT currency, balance, is_active FROM wallets WHERE user_id = ? ORDER BY id ASC",
+    "SELECT currency, balance, is_active FROM wallets WHERE user_id = $1 ORDER BY id ASC",
     [userId]
   );
   const wallets = result.rows.map((row) => {

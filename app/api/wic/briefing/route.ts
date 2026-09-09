@@ -3,28 +3,45 @@ import { verifySession } from "@/lib/auth";
 import { observeWorld } from "@/wic/observe";
 import { buildBriefing } from "@/wic/intelligence";
 import { db } from "@/lib/db";
+import { checkRateLimit } from "@/lib/rateLimit";
+import { formatErrorResponse, AuthenticationError, DatabaseError } from "@/lib/errors";
 
 // WIC Briefing endpoint: observe the world, then reason over it.
 export async function GET(req: NextRequest) {
-  const session = await verifySession();
-  if (!session) {
-    return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
-  }
-  
   try {
-    // 1. Get the real name from the database
-    const userRes = await db.execute("SELECT name FROM users WHERE id = ?", [session.userId]);
-    const firstName = userRes.rows[0]?.name 
+    // 1. Rate Limiting (Protects against expensive AI context-generation abuse)
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
+    await checkRateLimit(`ip:${ip}`, "api");
+
+    // 2. Session Validation
+    const session = await verifySession();
+    if (!session) {
+      throw new AuthenticationError("Unauthorized access to WIC briefing.");
+    }
+
+    // 3. Fetch User Data (CRITICAL FIX: Postgres uses $1, not ?)
+    const userRes = await db.execute("SELECT name FROM users WHERE id = $1", [session.userId]);
+    
+    if (userRes.rows.length === 0) {
+      throw new DatabaseError("User not found for valid session.");
+    }
+
+    const firstName = userRes.rows[0].name 
       ? String(userRes.rows[0].name).split(" ")[0] 
       : undefined;
 
-    // 2. Observe and Build
+    // 4. Observe and Build
     const world = await observeWorld(session.userId);
     const briefing = buildBriefing(world, firstName);
     
-    return NextResponse.json({ success: true, briefing });
-  } catch (error: any) {
-    console.error("WIC Briefing Error:", error);
-    return NextResponse.json({ success: false, message: "Briefing failed." }, { status: 500 });
+    return NextResponse.json({ 
+      success: true, 
+      briefing 
+    });
+
+  } catch (error: unknown) {
+    // 5. Unified Error Handling (Prevents stack trace leakage)
+    const { response } = formatErrorResponse(error);
+    return response;
   }
 }

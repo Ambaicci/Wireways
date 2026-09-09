@@ -9,6 +9,11 @@
 
 import { WorldModel, TransactionSnapshot } from "./observe";
 import { recallMemory, MemoryPattern } from "./memory";
+import { 
+  CURRENCY_SYMBOLS, 
+  formatCurrency, 
+  formatCompactUsd 
+} from "@/lib/constants";
 
 // ─── Types ────────────────────────────────────────────────
 export type MissionStatus = "attention" | "opportunity" | "good";
@@ -67,24 +72,16 @@ export interface Briefing {
 }
 
 // ─── Formatting helpers ─────────────────────────────────────
-const SYMBOLS: Record<string, string> = { USD: "$", EUR: "€", GBP: "£", USDC: "$", KES: "KSh " };
-
-function fmt(amount: number, currency: string): string {
-  const sym = SYMBOLS[currency] ?? currency + " ";
-  return sym + amount.toLocaleString(undefined, { maximumFractionDigits: amount < 100 ? 2 : 0 });
-}
-
-function compactUsd(amount: number): string {
-  if (amount >= 1_000_000) return "$" + (amount / 1_000_000).toFixed(1) + "M";
-  if (amount >= 1_000) return "$" + Math.round(amount / 1_000) + "K";
-  return "$" + Math.round(amount);
-}
+// Now uses deterministic, locale-safe formatters from constants.ts
 
 function dateLabel(dateStr: string): string {
-  const d = new Date(dateStr);
-  const days = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-  const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-  return `${days[d.getDay()]} · ${d.getDate()} ${months[d.getMonth()]}`;
+  // CRITICAL: Intl.DateTimeFormat guarantees consistent formatting 
+  // regardless of the server's host region.
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  }).format(new Date(dateStr)).toUpperCase().replace(",", " ·");
 }
 
 function toUsd(amount: number, currency: string, rates: Record<string, number>): number {
@@ -214,14 +211,14 @@ function buildMissions(world: WorldModel, convStats: ReturnType<typeof computeCo
     missions.push({
       id: `fund-${o.id}`,
       status: "attention",
-      title: `${o.name} is ${fmt(gap.shortfall, gap.currency)} short.`,
+      title: `${o.name} is ${formatCurrency(gap.shortfall, gap.currency)} short.`,
       detail: `Due in ${o.daysUntilRun} day${o.daysUntilRun === 1 ? "" : "s"}. I can move funds from your ${largestWallet?.currency ?? "USD"} wallet to cover the gap before it runs.`,
       actionLabel: "Fix it",
       action: { type: "prefill", payload: `Convert ${Math.ceil(gap.shortfall)} ${largestWallet?.currency ?? "USD"} to ${gap.currency} to fund ${o.name}` },
       explain: [
-        `Required: ${fmt(gap.required, gap.currency)} · Available: ${fmt(gap.available, gap.currency)}.`,
-        `Shortfall: ${fmt(gap.shortfall, gap.currency)} (≈ ${compactUsd(toUsd(gap.shortfall, gap.currency, world.fx.usdRates))}).`,
-        `Your largest wallet is ${largestWallet?.currency} (${compactUsd(largestWallet?.usdValue ?? 0)}), which WIC can draw from.`,
+        `Required: ${formatCurrency(gap.required, gap.currency)} · Available: ${formatCurrency(gap.available, gap.currency)}.`,
+        `Shortfall: ${formatCurrency(gap.shortfall, gap.currency)} (≈ ${formatCompactUsd(toUsd(gap.shortfall, gap.currency, world.fx.usdRates))}).`,
+        `Your largest wallet is ${largestWallet?.currency} (${formatCompactUsd(largestWallet?.usdValue ?? 0)}), which WIC can draw from.`,
       ],
     });
   }
@@ -240,15 +237,15 @@ function buildMissions(world: WorldModel, convStats: ReturnType<typeof computeCo
       missions.push({
         id: `fx-covered-${fxObligation.id}`,
         status: stat && liveRate < stat.avgRate ? "opportunity" : "good",
-        title: `Your ${fmt(fxObligation.amount, cur)} ${fxObligation.name} is already covered.`,
+        title: `Your ${formatCurrency(fxObligation.amount, cur)} ${fxObligation.name} is already covered.`,
         detail: stat
           ? `Your ${cur} balance covers it — no conversion needed. Today's rate (${liveRate.toFixed(4)}) is ${pctDelta(liveRate, stat.avgRate)} your recent average, so there's no rush to convert.`
           : `Your ${cur} balance covers it — no conversion needed.`,
         actionLabel: "Review",
         action: { type: "none", payload: "" },
         explain: [
-          `Upcoming need: ${fmt(fxObligation.amount, cur)} in ${fxObligation.daysUntilRun} day(s).`,
-          `Current ${cur} balance: ${fmt(bal, cur)}.`,
+          `Upcoming need: ${formatCurrency(fxObligation.amount, cur)} in ${fxObligation.daysUntilRun} day(s).`,
+          `Current ${cur} balance: ${formatCurrency(bal, cur)}.`,
           ...(stat ? [`Your average ${cur} conversion rate this month: ${stat.avgRate.toFixed(4)} across ${stat.count} conversions.`] : []),
           ...(stat ? [`Live rate today: ${liveRate.toFixed(4)} (${pctDelta(liveRate, stat.avgRate)} your average).`] : []),
         ],
@@ -258,11 +255,11 @@ function buildMissions(world: WorldModel, convStats: ReturnType<typeof computeCo
         id: `fx-favorable-${fxObligation.id}`,
         status: "opportunity",
         title: `Today's ${cur} rate looks favorable.`,
-        detail: `You need ${fmt(fxObligation.amount - bal, cur)} more for ${fxObligation.name}. The current rate is ${pctDelta(liveRate, stat.avgRate)} your recent average — converting now could save you money.`,
+        detail: `You need ${formatCurrency(fxObligation.amount - bal, cur)} more for ${fxObligation.name}. The current rate is ${pctDelta(liveRate, stat.avgRate)} your recent average — converting now could save you money.`,
         actionLabel: "Convert with WIC",
         action: { type: "prefill", payload: `Convert ${Math.ceil(fxObligation.amount - bal)} USD to ${cur}` },
         explain: [
-          `Needed: ${fmt(fxObligation.amount, cur)} · You have: ${fmt(bal, cur)}.`,
+          `Needed: ${formatCurrency(fxObligation.amount, cur)} · You have: ${formatCurrency(bal, cur)}.`,
           `Live rate: ${liveRate.toFixed(4)} vs your average ${stat.avgRate.toFixed(4)}.`,
         ],
       });
@@ -319,7 +316,7 @@ function buildWatching(
     items.push({
       id: "watch-fx",
       category: "fx",
-      title: `EUR rate is ${world.fx.eurPerUsd.toFixed(4)}`,
+      title: `EUR rate is ${(world.fx.usdRates.EUR ?? 0.92).toFixed(4)}`,
       detail: world.fx.live ? "Live mid-market rate, updated continuously." : "Using reference rates (live feed unavailable).",
     });
   }
@@ -370,9 +367,9 @@ function buildUpcoming(world: WorldModel): UpcomingItem[] {
       dateLabel: dateLabel(o.nextRunDate),
       daysUntilRun: o.daysUntilRun,
       currency: o.currency,
-      amountLabel: fmt(o.amount, o.currency),
+      amountLabel: formatCurrency(o.amount, o.currency),
       funded: o.fullyFunded,
-      gapLabel: o.gaps.length > 0 ? `${fmt(o.gaps[0].shortfall, o.gaps[0].currency)} gap` : null,
+      gapLabel: o.gaps.length > 0 ? `${formatCurrency(o.gaps[0].shortfall, o.gaps[0].currency)} gap` : null,
     }));
 }
 
@@ -418,11 +415,11 @@ export function buildBriefing(world: WorldModel, firstName?: string): Briefing {
   const breakdownSentence = sortedWallets
     .filter((w) => w.usdValue > 0)
     .slice(0, 3)
-    .map((w) => `${compactUsd(w.usdValue)} ${w.currency}`)
+    .map((w) => `${formatCompactUsd(w.usdValue)} ${w.currency}`)
     .join(" · ");
 
   const liquiditySentence = isEmptyWorld
-    ? `Your wallets are empty. Top up to begin your financial operations.`
+    ? "Your wallets are empty. Top up to begin your financial operations."
     : world.liquidityDays >= 14
       ? `You're comfortably funded for the next ${world.liquidityDays} days.`
       : world.liquidityDays >= 7

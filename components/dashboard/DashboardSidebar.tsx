@@ -1,139 +1,175 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { motion } from "framer-motion";
 import {
-  LayoutDashboard,
+  Home,
   Wallet,
   Send,
-  Link as LinkIcon,
+  Download,
+  CalendarClock,
+  CreditCard,
   Settings,
   ChevronLeft,
   ChevronRight,
-  CreditCard,
-  CalendarClock,
-  LogOut,
+  Code2, // <-- ADD THIS
 } from "lucide-react";
-import { logoutUser } from "@/lib/actions";
-import { toast } from "@/components/ui/Toaster";
+import WicIcon from "@/components/ui/WicIcon";
 
+// Updated naming for precision and professionalism
 const navigation = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Home", href: "/dashboard", icon: Home },
   { name: "Wallets", href: "/wallets", icon: Wallet },
   { name: "Payments", href: "/payments", icon: Send },
-  { name: "Payment Links", href: "/payment-links", icon: LinkIcon },
+  { name: "Collect", href: "/payment-links", icon: Download },
   { name: "Wire-roll", href: "/wire-roll", icon: CalendarClock },
-  { name: "Payment Methods", href: "/payment-methods", icon: CreditCard },
+  { name: "Cards", href: "/payment-methods", icon: CreditCard },
 ];
 
-export default function DashboardSidebar() {
+export default function DashboardSidebar({ 
+  isCollapsed, 
+  setIsCollapsed 
+}: { 
+  isCollapsed: boolean; 
+  setIsCollapsed: (val: boolean) => void; 
+}) {
   const pathname = usePathname();
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [wicScore, setWicScore] = useState<number | null>(null);
 
-  const handleLogout = async () => {
-    await logoutUser();
-    toast("Logged out successfully. See you soon!", "success");
-    // Hard redirect: flushes the Next.js client-side cache so the
-    // middleware re-evaluates auth from scratch. No more bounce-back.
-    window.location.href = "/";
-  };
+  // Live WIC score for the sidebar pulse
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const r = await fetch("/api/wic/briefing");
+        if (!r.ok) return;
+        const d = await r.json();
+        const s = d?.score ?? d?.wicScore ?? d?.calibration?.score ?? d?.briefing?.score;
+        if (alive && typeof s === "number") setWicScore(s);
+      } catch {
+        // Silent: the dot remains, the score stays hidden if unavailable
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
 
   return (
-    <motion.aside
-      className={`bg-white border-r border-[#EAE6DF] sticky top-0 h-screen flex flex-col ${isCollapsed ? "w-[76px]" : "w-[252px]"}`}
-      animate={{ width: isCollapsed ? 76 : 252 }}
-      transition={{ duration: 0.2, ease: "easeInOut" }}
-    >
-      {/* Header with Logo and Toggle */}
-      <div className="flex items-center justify-between px-[14px] py-[18px]">
-        {!isCollapsed && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="flex items-center gap-2.5 overflow-hidden"
-          >
-            <div className="w-[30px] h-[30px] rounded-[9px] bg-[#F1622C] flex items-center justify-center flex-shrink-0">
-              <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-              </svg>
-            </div>
-            <span className="text-[15.5px] font-semibold text-[#18140F] tracking-tight whitespace-nowrap">
-              Wireways
-            </span>
-          </motion.div>
-        )}
+    // Updated to crisp white background with Apple-like subtle border
+    <aside className={`${isCollapsed ? "w-[72px]" : "w-[228px]"} transition-all duration-300 ease-in-out h-full bg-white border-r border-[#E5E5EA] flex flex-col`}>
+      
+      {/* Header: Brand (Clickable) + Toggle Button */}
+      <div className={`flex items-center ${isCollapsed ? "flex-col gap-3" : "justify-between"} px-4 pt-5 pb-4 flex-shrink-0`}>
+        <Link href="/" className={`flex items-center gap-2.5 ${isCollapsed ? "justify-center" : ""}`} title="Back to Wireways home">
+          <div className="w-8 h-8 rounded-lg bg-[#F1622C] flex items-center justify-center flex-shrink-0 shadow-sm">
+            <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+            </svg>
+          </div>
+          {!isCollapsed && <span className="text-[15px] font-bold text-[#1D1D1F] tracking-tight">Wireways</span>}
+        </Link>
+        
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className={`w-[22px] h-[22px] rounded-[6px] border border-[#EAE6DF] bg-white text-[#8C8579] flex items-center justify-center flex-shrink-0 hover:text-[#18140F] transition-all ${isCollapsed ? "mx-auto" : ""}`}
+          className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 text-[#86868B] hover:bg-[#F5F5F7] hover:text-[#1D1D1F] transition-all"
+          title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
-          {isCollapsed ? (
-            <ChevronRight className="w-3 h-3" />
-          ) : (
-            <ChevronLeft className="w-3 h-3" />
-          )}
+          {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
         </button>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-[14px] space-y-[2px]">
+      <nav className="flex-1 px-3 space-y-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {navigation.map((item) => {
-          const isActive = pathname === item.href;
+          const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
           return (
             <Link
               key={item.name}
               href={item.href}
-              className={`flex items-center gap-[11px] rounded-[10px] text-[13.5px] font-medium transition-all ${
-                isCollapsed ? "justify-center py-[9px]" : "px-[11px] py-[9px]"
+              title={isCollapsed ? item.name : undefined}
+              className={`flex items-center gap-3 rounded-xl text-[13.5px] font-medium transition-all duration-200 ${
+                isCollapsed ? "justify-center py-2.5" : "px-3 py-2.5"
               } ${
                 isActive
-                  ? "bg-[#F1622C] text-white"
-                  : "text-[#4E4841] hover:bg-[#FAFAF9] hover:text-[#18140F]"
+                  ? "bg-[#F1622C] text-white shadow-[0_4px_12px_rgba(241,98,44,0.25)]"
+                  : "text-[#86868B] hover:bg-[#F5F5F7] hover:text-[#1D1D1F]"
               }`}
-              title={isCollapsed ? item.name : undefined}
             >
-              <item.icon className={`w-[17px] h-[17px] flex-shrink-0 ${isActive ? "text-white" : ""}`} />
-              {!isCollapsed && (
-                <motion.span
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="whitespace-nowrap"
-                >
-                  {item.name}
-                </motion.span>
-              )}
+              {/* Bumped all icons to w-5 h-5 for perfect visual weight */}
+              <item.icon className="w-5 h-5 flex-shrink-0" strokeWidth={isActive ? 2.5 : 2} />
+              {!isCollapsed && <span className="tracking-tight">{item.name}</span>}
             </Link>
           );
         })}
       </nav>
 
-      {/* Settings & Logout at Bottom */}
-      <div className="px-[14px] pb-[18px] mt-auto space-y-[2px]">
+      {/* Bottom: WIC Intelligence + Settings */}
+      <div className="px-3 pb-5 pt-2 space-y-1 flex-shrink-0 border-t border-[#E5E5EA] mt-2">
+        {/* WIC Link with Proprietary Icon */}
         <Link
-          href="/settings"
-          className={`flex items-center gap-[11px] rounded-[10px] text-[13.5px] font-medium text-[#4E4841] hover:bg-[#FAFAF9] hover:text-[#18140F] transition-all ${
-            isCollapsed ? "justify-center py-[9px]" : "px-[11px] py-[9px]"
+          href="/wic"
+          title="WIC Intelligence & OpenWIC Gateway"
+          className={`flex items-center gap-3 rounded-xl text-[13.5px] font-medium transition-all duration-200 ${
+            isCollapsed ? "justify-center py-2.5" : "px-3 py-2.5"
+          } ${
+            pathname === "/wic" || pathname.startsWith("/wic/")
+              ? "bg-[#F1622C] text-white shadow-[0_4px_12px_rgba(241,98,44,0.25)]"
+              : "text-[#86868B] hover:bg-[#F5F5F7] hover:text-[#1D1D1F]"
           }`}
-          title={isCollapsed ? "Settings" : undefined}
         >
-          <Settings className="w-[17px] h-[17px] flex-shrink-0" />
-          {!isCollapsed && "Settings"}
+          <span className="relative flex items-center justify-center flex-shrink-0">
+            {/* Bumped WIC icon to w-5 h-5 to perfectly match other icons */}
+            <WicIcon className={`w-8 h-8 ${pathname === "/wic" || pathname.startsWith("/wic/") ? "text-white" : "text-[#F1622C]"}`} />
+            {/* Live pulse indicator */}
+            <span className="absolute -top-0.5 -right-0.5 w-[7px] h-[7px] rounded-full bg-[#F1622C] border-2 border-white" />
+          </span>
+          {!isCollapsed && (
+            <>
+              <span className="flex-1 tracking-tight">WIC</span>
+              {wicScore !== null && (
+                <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-md ${
+                  pathname === "/wic" || pathname.startsWith("/wic/") 
+                    ? "bg-white/20 text-white" 
+                    : "bg-[#F1622C]/10 text-[#F1622C]"
+                }`}>
+                  {wicScore}
+                </span>
+              )}
+            </>
+          )}
         </Link>
 
-        <button
-          onClick={handleLogout}
-          className={`flex items-center gap-[11px] w-full rounded-[10px] text-[13.5px] font-medium text-[#4E4841] hover:bg-[#FBF1DA] hover:text-[#C94A1D] transition-all ${
-            isCollapsed ? "justify-center py-[9px]" : "px-[11px] py-[9px]"
+              {/* OpenWIC Developer Gateway */}
+        <Link
+          href="/openwic"
+          title="OpenWIC Developer Gateway"
+          className={`flex items-center gap-3 rounded-xl text-[13.5px] font-medium transition-all duration-200 ${
+            isCollapsed ? "justify-center py-2.5" : "px-3 py-2.5"
+          } ${
+            pathname === "/openwic" || pathname.startsWith("/openwic/")
+              ? "bg-[#0F172A] text-white shadow-[0_4px_12px_rgba(15,23,42,0.25)]"
+              : "text-[#86868B] hover:bg-[#F5F5F7] hover:text-[#1D1D1F]"
           }`}
-          title={isCollapsed ? "Log out" : undefined}
         >
-          <LogOut className="w-[17px] h-[17px] flex-shrink-0" />
-          {!isCollapsed && "Log out"}
-        </button>
+          <Code2 className="w-5 h-5 flex-shrink-0" strokeWidth={pathname === "/openwic" || pathname.startsWith("/openwic/") ? 2.5 : 2} />
+          {!isCollapsed && <span className="tracking-tight">OpenWIC</span>}
+        </Link>
+       
+        <Link
+          href="/settings"
+          title="Settings"
+          className={`flex items-center gap-3 rounded-xl text-[13.5px] font-medium transition-all duration-200 ${
+            isCollapsed ? "justify-center py-2.5" : "px-3 py-2.5"
+          } ${
+            pathname === "/settings" || pathname.startsWith("/settings/")
+              ? "bg-[#F1622C] text-white shadow-[0_4px_12px_rgba(241,98,44,0.25)]"
+              : "text-[#86868B] hover:bg-[#F5F5F7] hover:text-[#1D1D1F]"
+          }`}
+        >
+          <Settings className="w-5 h-5 flex-shrink-0" strokeWidth={pathname === "/settings" || pathname.startsWith("/settings/") ? 2.5 : 2} />
+          {!isCollapsed && <span className="tracking-tight">Settings</span>}
+        </Link>
       </div>
-    </motion.aside>
+    </aside>
   );
 }
