@@ -34,9 +34,8 @@ export default async function DashboardPage() {
     const recent = world.transactions.slice(0, 5);
 
     return (
-      <WicDashboard
+           <WicDashboard
         briefing={briefing}
-        insights={[]}
         recent={recent}
         wallets={world.wallets}
         accountType={accountType}
