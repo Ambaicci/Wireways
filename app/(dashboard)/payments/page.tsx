@@ -131,9 +131,8 @@ export default async function PaymentsPage({
           }
         />
       ) : (
-        <PaymentsList 
-          transactions={transactions} 
-          wallets={wallets}
+         <PaymentsList
+          transactions={transactions}
           currentFilters={{
             type: filterType,
             currency: filterCurrency,
