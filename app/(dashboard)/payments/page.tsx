@@ -131,13 +131,8 @@ export default async function PaymentsPage({
           }
         />
       ) : (
-         <PaymentsList
+        <PaymentsList
           transactions={transactions}
-          currentFilters={{
-            type: filterType,
-            currency: filterCurrency,
-            search: searchQuery,
-          }}
         />
       )}
     </div>
