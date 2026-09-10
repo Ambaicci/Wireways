@@ -678,20 +678,15 @@ function CreateWireRollModal({ onClose, onCreated }: { onClose: () => void; onCr
           rail: "Auto",
         };
       });
-      
-      const validated = parsed.map(item => {
+         const validated = parsed.map(item => {
         let valid = true;
         let error = "";
         if (!item.recipient) { valid = false; error = "Missing name"; }
         else if (!item.amount || isNaN(parseFloat(item.amount)) || parseFloat(item.amount) <= 0) { valid = false; error = "Invalid amount"; }
-        else if (!SUPPORTED_CURRENCIES.includes(item.currency)) { valid = false; error = "Unsupported currency"; }
+        else if (!SUPPORTED_CURRENCIES.includes(item.currency as any)) { valid = false; error = "Unsupported currency"; }
         return { ...item, _valid: valid, _error: error };
       });
       setCsvPreview(validated);
-    };
-    reader.readAsText(file);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-  };
 
   const applyCsvPreview = () => {
     if (!csvPreview) return;
