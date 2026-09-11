@@ -287,10 +287,10 @@ export async function POST(req: NextRequest) {
           payload,
           expiresAt,
           message,
-          requiresConfirmation: draftType === "RECURRING_DRAFT" || synapseResult.entities.amount > 10000,
+          requiresConfirmation: draftType === "RECURRING_DRAFT" || (synapseResult.entities.amount ?? 0) > 10000                  ,
           confirmationReason: draftType === "RECURRING_DRAFT"
             ? "Recurring payments run automatically until cancelled."
-            : synapseResult.entities.amount > 10000 
+            : (synapseResult.entities.amount ?? 0) > 10000                   
               ? `This is a large transfer (${synapseResult.entities.amount} ${synapseResult.entities.currency}). Please confirm.` 
               : null,
         },
