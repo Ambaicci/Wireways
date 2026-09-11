@@ -202,12 +202,13 @@ export async function POST(req: NextRequest) {
     } else if (synapseResult.intent === "CONVERT") {
       draftType = "CONVERSION_DRAFT";
       
-      // Calculate live rate mathematically using fetched data
-      const fromRate = fxRates[synapseResult.entities.currency] || 1;
-      const toRate = fxRates[synapseResult.entities.targetCurrency] || 1;
+           // Calculate live rate mathematically using fetched data (with null fallbacks)
+      const fromCurrency = synapseResult.entities.currency || 'USD';
+      const toCurrency = synapseResult.entities.targetCurrency || 'USD';
+      const fromRate = fxRates[fromCurrency] || 1;
+      const toRate = fxRates[toCurrency] || 1;
       const rate = toRate / fromRate;
       const convertedAmount = synapseResult.entities.amount * rate;
-
       message = `Drafting a conversion of ${synapseResult.entities.amount} ${synapseResult.entities.currency} to ${convertedAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${synapseResult.entities.targetCurrency} (Rate: 1 ${synapseResult.entities.currency} = ${rate.toFixed(4)} ${synapseResult.entities.targetCurrency}).`;
       
       payloadData = {
