@@ -51,7 +51,9 @@ export default function CardsList({ methods, strategy, suggestion }: { methods: 
       <div className="rounded-[20px] border border-[#E8E0D4] bg-[#FFFDF9] p-6">
         <div className="flex items-center gap-3 mb-1.5">
           <div className="w-9 h-9 rounded-[11px] flex items-center justify-center" style={{ backgroundColor: ACCENT_SOFT }}>
-            <WicStar className="w-4 h-4" style={{ color: ACCENT }} />
+            <span style={{ color: ACCENT }}>
+  <WicStar className="w-4 h-4" />
+</span>
           </div>
           <div>
             <h2 className="text-[15px] font-bold text-[#312B1E] tracking-[-0.02em]">How doors work</h2>
