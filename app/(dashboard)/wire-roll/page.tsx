@@ -865,10 +865,11 @@ function CreateWireRollModal({ onClose, onCreated }: { onClose: () => void; onCr
             </div>
           )}
 
-          <button onClick={handleSubmit} disabled={isSubmitting} className="w-full py-3.5 rounded-xl bg-[#F1622C] text-white text-[14px] font-semibold hover:bg-[#D4511E] transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+                  <button onClick={handleSubmit} disabled={isSubmitting} className="w-full py-3.5 rounded-xl bg-[#F1622C] text-white text-[14px] font-semibold hover:bg-[#D4511E] transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
             {isSubmitting ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating...</> : <>Create Wire-roll</>}
           </button>
          </div>
+      </motion.div>
     </motion.div>
   );
 }
