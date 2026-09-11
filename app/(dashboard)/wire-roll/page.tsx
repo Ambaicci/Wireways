@@ -678,7 +678,7 @@ function CreateWireRollModal({ onClose, onCreated }: { onClose: () => void; onCr
           rail: "Auto",
         };
       });
-         const validated = parsed.map(item => {
+             const validated = parsed.map(item => {
         let valid = true;
         let error = "";
         if (!item.recipient) { valid = false; error = "Missing name"; }
@@ -687,6 +687,8 @@ function CreateWireRollModal({ onClose, onCreated }: { onClose: () => void; onCr
         return { ...item, _valid: valid, _error: error };
       });
       setCsvPreview(validated);
+    };
+  };
 
   const applyCsvPreview = () => {
     if (!csvPreview) return;
