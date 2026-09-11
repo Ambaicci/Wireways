@@ -208,8 +208,9 @@ export async function POST(req: NextRequest) {
       const fromRate = fxRates[fromCurrency] || 1;
       const toRate = fxRates[toCurrency] || 1;
       const rate = toRate / fromRate;
-      const convertedAmount = synapseResult.entities.amount * rate;
-      message = `Drafting a conversion of ${synapseResult.entities.amount} ${synapseResult.entities.currency} to ${convertedAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${synapseResult.entities.targetCurrency} (Rate: 1 ${synapseResult.entities.currency} = ${rate.toFixed(4)} ${synapseResult.entities.targetCurrency}).`;
+      const amount = synapseResult.entities.amount ?? 0;
+      const convertedAmount = amount * rate;
+      message = `Drafting a conversion of ${amount} ${synapseResult.entities.currency || ''} to ${synapseResult.entities.targetCurrency || ''}...`;
       
       payloadData = {
         fromCurrency: synapseResult.entities.currency,
