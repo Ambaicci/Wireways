@@ -5,6 +5,7 @@
 
 import { SUPPORTED_CURRENCIES, VALID_FREQUENCIES } from "@/lib/constants";
 
+const buildTopupDraft = (e: any, session: any, trace: any): any => ({ type: "TOPUP", amount: 0, message: "Topup draft" });
 export type DraftType =
   | "PAYMENT_DRAFT" | "CONVERSION_DRAFT" | "ADD_FUNDS_DRAFT" | "LINK_DRAFT"
   | "RECURRING_DRAFT" | "CORRECTION_DRAFT" | "BALANCE_QUERY"

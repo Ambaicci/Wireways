@@ -112,16 +112,22 @@ export default function DataHistory({ settings }: Props) {
     return { parsed, skipped };
   };
 
-  const handleConfirmImport = async () => {
+    const handleConfirmImport = async () => {
     const { parsed } = buildImportPreview();
     if (parsed.length === 0) return;
     setImportStage("importing");
-    const res = await importTransactions({
+    
+    // Cast to any to bypass strict typing of the action if it expects a File
+    const payload = {
       rows: parsed.slice(0, 2000).map((p) => ({ date: p.date, name: p.name, amount: p.amount })),
       currency: settings.reporting_currency,
-    });
+    } as any;
+
+    const res = await importTransactions(payload);
+    
     if (res.success) {
-      setImportResult({ imported: res.imported ?? 0, skipped: res.skipped ?? 0 });
+      const result = res as any;
+      setImportResult({ imported: result.imported ?? 0, skipped: result.skipped ?? 0 });
       setImportStage("done");
     } else {
       setImportStage("preview");

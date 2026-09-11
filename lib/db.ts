@@ -20,7 +20,7 @@ const sql = postgres(DATABASE_URL, {
         console.log("📦 Params:", params);
       }
     : false,
-  onnotice: (notice) => {
+  onnotice: (notice: any) => {
     console.warn("📢 Postgres Notice:", notice.message);
   },
 });
@@ -39,7 +39,7 @@ export const db = {
     ...values: any[]
   ): Promise<QueryResult<T>> {
     try {
-      const result = await sql<T>`${sql(strings, ...values)}`;
+      const result: any = await sql`${sql(strings, ...values)}`;
       return {
         rows: result as T[],
         rowCount: result.length,
@@ -53,36 +53,36 @@ export const db = {
     }
   },
 
- async execute<T = any>(
-  query: string,
-  args: any[] = []
-): Promise<QueryResult<T>> {
-  try {
-    const trimmedQuery = query.trim();
-    
-    if (!trimmedQuery) {
-      return { rows: [], rowCount: 0 };
+  async execute<T = any>(
+    query: string,
+    args: any[] = []
+  ): Promise<QueryResult<T>> {
+    try {
+      const trimmedQuery = query.trim();
+      
+      if (!trimmedQuery) {
+        return { rows: [], rowCount: 0 };
+      }
+      
+      const result: any = await sql.unsafe(trimmedQuery, args);
+      return {
+        rows: result as T[],
+        rowCount: result.length,
+      };
+    } catch (error) {
+      console.error("❌ Database execute failed:", error);
+      throw new DatabaseError("Query execution failed", {
+        cause: error,
+        query,
+      });
     }
-    
-    const result = await sql.unsafe(trimmedQuery, args);
-    return {
-      rows: result as T[],
-      rowCount: result.length,
-    };
-  } catch (error) {
-    console.error("❌ Database execute failed:", error);
-    throw new DatabaseError("Query execution failed", {
-      cause: error,
-      query,
-    });
-  }
-},
+  },
 
-  async transaction<T>(
-    callback: (trx: typeof sql) => Promise<T>
+  async transaction<T = any>(
+    callback: (trx: any) => Promise<T>
   ): Promise<T> {
     try {
-      return await sql.begin(async (trx) => {
+      return await (sql as any).begin(async (trx: any) => {
         return callback(trx);
       });
     } catch (error) {

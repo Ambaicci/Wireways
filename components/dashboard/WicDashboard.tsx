@@ -223,7 +223,7 @@ export default function WicDashboard({ briefing, recent, wallets, accountType = 
                     />
                   </div>
                   <div className="flex gap-1.5 flex-shrink-0">
-                    {briefItems.map((_, i) => (
+                    {briefItems.map((_: any, i: number) => (                  
                       <button
                         key={i}
                         onClick={(e) => jumpBrief(e, i)}
@@ -278,13 +278,13 @@ export default function WicDashboard({ briefing, recent, wallets, accountType = 
           <div className="flex items-baseline justify-between mb-3">
             <div>
               <h2 className="text-[17px] leading-[1.25] tracking-[-0.025em] font-[600] text-[#1C1917]">
-                {briefItems.filter(m => m.status !== "good").length > 0 ? "2 more things" : "You're on track"}
+                {briefItems.filter((m: any) => m.status                !== "good").length > 0 ? "2 more things" : "You're on track"}
               </h2>
               <p className="text-[11px] mt-0.5" style={{ color: T.muted }}>Prioritized by urgency.</p>
             </div>
           </div>
           <div className="grid grid-cols-3 gap-2.5">
-            {briefItems.map((item, i) => {
+            {briefItems.map((item: any, i: number) => {               
               const isSolid = item.status !== "good";
               return (
                 <motion.article

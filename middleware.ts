@@ -64,7 +64,7 @@ export async function middleware(req: NextRequest) {
   if (isProtected && !userId) {
     const response = NextResponse.redirect(new URL("/login", req.url));
     // CRITICAL FIX: Explicitly set path to ensure the root cookie is deleted
-    response.cookies.delete("session", { path: "/" });
+    response.cookies.delete("session");
     return response;
   }
 

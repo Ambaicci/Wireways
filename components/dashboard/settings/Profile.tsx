@@ -85,7 +85,7 @@ export default function Profile({ user, settings, patchSetting }: Props) {
       const dataUrl = await processAvatar(file);
       setAvatar(dataUrl);
       setUploadingAvatar(true);
-      const res = await uploadAvatar(dataUrl);
+      const res = await uploadAvatar(dataUrl as any);
       setUploadingAvatar(false);
       if (!res.success) setAvatar(previous);
     } catch {

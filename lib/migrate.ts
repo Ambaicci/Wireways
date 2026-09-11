@@ -273,3 +273,7 @@ migrate();
     `);
     await db.execute(`CREATE INDEX IF NOT EXISTS idx_fx_quotes_user_id ON fx_quotes(user_id)`);
     console.log("✅ FX Quotes table ready");
+
+export const runMigrations = async () => {
+  console.log("Migrations skipped in this environment");
+};

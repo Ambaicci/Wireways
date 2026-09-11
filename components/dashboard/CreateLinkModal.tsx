@@ -6,13 +6,15 @@ import { X, Check, Loader2, Link2, User, Mail, CreditCard, Building2, Smartphone
 import WicIcon from "@/components/ui/WicIcon";
 
 export default function CreateLinkModal({
-  isOpen,
+  isOpen = true,
   onClose,
-  contacts,
+  contacts = [],
+  onCreated,
 }: {
-  isOpen: boolean;
+  isOpen?: boolean;
   onClose: () => void;
-  contacts: { id: string; name: string; email: string }[];
+  contacts?: { id: string; name: string; email: string }[];
+  onCreated?: () => void;
 }) {
   const [mode, setMode] = useState<"internal" | "external">("external");
   const [step, setStep] = useState(0);
@@ -50,6 +52,7 @@ export default function CreateLinkModal({
     setLinkUrl(`https://pay.wireways.com/req/${Math.random().toString(36).substring(7)}`);
     setIsProcessing(false);
     setStep(1);
+    if (onCreated) onCreated();
   };
 
   const handleShare = async () => {
@@ -122,7 +125,7 @@ export default function CreateLinkModal({
               </h4>
               <p className="text-[14px] text-[#86868B] mt-2 mb-6 leading-relaxed">
                 {mode === "internal" 
-                  ? `${amountNum.toLocaleString()} ${currency} requested from ${contacts.find(c => c.id === selectedContactId)?.name}.`
+                  ? `${amountNum.toLocaleString()} ${currency} requested from ${contacts.find(c => c.id === selectedContactId)?.name || 'contact'}.`
                   : "Share this link with your client to collect payment."}
               </p>
 

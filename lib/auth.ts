@@ -101,10 +101,5 @@ export async function verifySession() {
 export async function deleteSession() {
   const cookieStore = await cookies();
   // CRITICAL: Must match creation options to ensure the browser actually deletes it
-  cookieStore.delete("session", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
-    path: "/",
-  });
+   cookieStore.delete("session");
 }

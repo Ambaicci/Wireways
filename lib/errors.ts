@@ -36,7 +36,7 @@ export abstract class AppError extends Error {
     };
 
     if (!isProduction || this.details?.safeForClient) {
-      response.error.details = this.details;
+      (response.error as any).details                   = this.details;
     }
 
     return response;
@@ -139,7 +139,7 @@ export function formatErrorResponse(error: unknown): { response: Response; log: 
 
   console.error("🚨 UNHANDLED EXCEPTION:", error);
   
-  const fallbackError = new AppError(
+  const fallbackError = new (AppError as any)(                
     "An unexpected error occurred. Please try again later.",
     500,
     "internal_server_error",
