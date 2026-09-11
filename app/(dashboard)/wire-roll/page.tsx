@@ -547,7 +547,6 @@ function WicSuggestions({ onDismiss, onCreateRoll }: { onDismiss: () => void; on
 
   const handleCreateFromSuggestion = (suggestion: any) => {
     onCreateRoll();
-    // Prefill logic can be added here later via window events or state
   };
 
   if (loading) return null;
@@ -678,7 +677,8 @@ function CreateWireRollModal({ onClose, onCreated }: { onClose: () => void; onCr
           rail: "Auto",
         };
       });
-             const validated = parsed.map(item => {
+      
+      const validated = parsed.map(item => {
         let valid = true;
         let error = "";
         if (!item.recipient) { valid = false; error = "Missing name"; }
@@ -699,6 +699,7 @@ function CreateWireRollModal({ onClose, onCreated }: { onClose: () => void; onCr
   };
 
   const discardCsvPreview = () => { setCsvPreview(null); setCsvFileName(""); };
+  
   const updateCsvRow = (idx: number, field: keyof BatchItem, value: string) => {
     if (!csvPreview) return;
     const updated = [...csvPreview];
@@ -710,7 +711,10 @@ function CreateWireRollModal({ onClose, onCreated }: { onClose: () => void; onCr
     updated[idx]._error = error;
     setCsvPreview(updated);
   };
-  const removeCsvRow = (idx: number) => { if (csvPreview) setCsvPreview(csvPreview.filter((_, i) => i !== idx)); };
+  
+  const removeCsvRow = (idx: number) => { 
+    if (csvPreview) setCsvPreview(csvPreview.filter((_, i) => i !== idx)); 
+  };
 
   const addBatchItem = () => setBatchItems([...batchItems, { recipient: "", currency: "USD", amount: "", rail: "Auto" }]);
   const removeBatchItem = (idx: number) => { if (batchItems.length > 0) setBatchItems(batchItems.filter((_, i) => i !== idx)); };
@@ -815,7 +819,16 @@ function CreateWireRollModal({ onClose, onCreated }: { onClose: () => void; onCr
                         <input type="text" value={item.recipient} onChange={(e) => updateCsvRow(idx, "recipient", e.target.value)} placeholder="Name" className={`flex-1 bg-transparent border border-[#E7E5E4] rounded-lg px-2.5 py-1.5 text-[12px] outline-none focus:border-[#F1622C] ${!item._valid && !item.recipient ? "border-[#C53030]/40" : ""}`} />
                         <input type="number" value={item.amount} onChange={(e) => updateCsvRow(idx, "amount", e.target.value)} placeholder="0.00" className={`w-20 bg-transparent border border-[#E7E5E4] rounded-lg px-2.5 py-1.5 text-[12px] outline-none focus:border-[#F1622C] ${!item._valid && !item.amount ? "border-[#C53030]/40" : ""}`} />
                         <select value={item.currency} onChange={(e) => updateCsvRow(idx, "currency", e.target.value)} className="w-20 bg-transparent border border-[#E7E5E4] rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-[#F1622C]">{SUPPORTED_CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
-                        {item._valid ? <CheckCircle2 className="w-4 h-4 text-[#287A55] flex-shrink-0" /> : <AlertTriangle className="w-4 h-4 text-[#C53030] flex-shrink-0" title={item._error} />}
+                        
+                        {/* ✅ FIXED: Wrapped AlertTriangle in a span to safely accept the title prop */}
+                        {item._valid ? (
+                          <CheckCircle2 className="w-4 h-4 text-[#287A55] flex-shrink-0" />
+                        ) : (
+                          <span title={item._error}>
+                            <AlertTriangle className="w-4 h-4 text-[#C53030] flex-shrink-0" />
+                          </span>
+                        )}
+                        
                         <button onClick={() => removeCsvRow(idx)} className="w-6 h-6 rounded flex items-center justify-center text-[#A8A29E] hover:text-[#C53030] flex-shrink-0"><X className="w-3 h-3" /></button>
                       </div>
                     ))}
@@ -865,10 +878,10 @@ function CreateWireRollModal({ onClose, onCreated }: { onClose: () => void; onCr
             </div>
           )}
 
-                  <button onClick={handleSubmit} disabled={isSubmitting} className="w-full py-3.5 rounded-xl bg-[#F1622C] text-white text-[14px] font-semibold hover:bg-[#D4511E] transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
+          <button onClick={handleSubmit} disabled={isSubmitting} className="w-full py-3.5 rounded-xl bg-[#F1622C] text-white text-[14px] font-semibold hover:bg-[#D4511E] transition-colors disabled:opacity-60 flex items-center justify-center gap-2">
             {isSubmitting ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating...</> : <>Create Wire-roll</>}
           </button>
-         </div>
+        </div>
       </motion.div>
     </motion.div>
   );
