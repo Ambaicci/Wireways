@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -13,11 +13,12 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  Code2, // <-- ADD THIS
+  Code2,
+  MoreHorizontal,
+  Globe,
 } from "lucide-react";
 import WicIcon from "@/components/ui/WicIcon";
 
-// Updated naming for precision and professionalism
 const navigation = [
   { name: "Home", href: "/dashboard", icon: Home },
   { name: "Wallets", href: "/wallets", icon: Wallet },
@@ -36,6 +37,8 @@ export default function DashboardSidebar({
 }) {
   const pathname = usePathname();
   const [wicScore, setWicScore] = useState<number | null>(null);
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
 
   // Live WIC score for the sidebar pulse
   useEffect(() => {
@@ -54,9 +57,21 @@ export default function DashboardSidebar({
     return () => { alive = false; };
   }, []);
 
+  // Close popover when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
+        setIsMoreOpen(false);
+      }
+    };
+    if (isMoreOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isMoreOpen]);
+
   return (
-    // Updated to crisp white background with Apple-like subtle border
-    <aside className={`${isCollapsed ? "w-[72px]" : "w-[228px]"} transition-all duration-300 ease-in-out h-full bg-white border-r border-[#E5E5EA] flex flex-col`}>
+    <aside className={`${isCollapsed ? "w-[72px]" : "w-[228px]"} transition-all duration-300 ease-in-out h-full bg-white border-r border-[#E5E5EA] flex flex-col relative`}>
       
       {/* Header: Brand (Clickable) + Toggle Button */}
       <div className={`flex items-center ${isCollapsed ? "flex-col gap-3" : "justify-between"} px-4 pt-5 pb-4 flex-shrink-0`}>
@@ -95,7 +110,6 @@ export default function DashboardSidebar({
                   : "text-[#86868B] hover:bg-[#F5F5F7] hover:text-[#1D1D1F]"
               }`}
             >
-              {/* Bumped all icons to w-5 h-5 for perfect visual weight */}
               <item.icon className="w-5 h-5 flex-shrink-0" strokeWidth={isActive ? 2.5 : 2} />
               {!isCollapsed && <span className="tracking-tight">{item.name}</span>}
             </Link>
@@ -103,9 +117,10 @@ export default function DashboardSidebar({
         })}
       </nav>
 
-      {/* Bottom: WIC Intelligence + Settings */}
+      {/* Bottom: WIC Intelligence + More Menu + Settings */}
       <div className="px-3 pb-5 pt-2 space-y-1 flex-shrink-0 border-t border-[#E5E5EA] mt-2">
-        {/* WIC Link with Proprietary Icon */}
+        
+        {/* WIC Link */}
         <Link
           href="/wic"
           title="WIC Intelligence & OpenWIC Gateway"
@@ -118,9 +133,7 @@ export default function DashboardSidebar({
           }`}
         >
           <span className="relative flex items-center justify-center flex-shrink-0">
-            {/* Bumped WIC icon to w-5 h-5 to perfectly match other icons */}
             <WicIcon className={`w-8 h-8 ${pathname === "/wic" || pathname.startsWith("/wic/") ? "text-white" : "text-[#F1622C]"}`} />
-            {/* Live pulse indicator */}
             <span className="absolute -top-0.5 -right-0.5 w-[7px] h-[7px] rounded-full bg-[#F1622C] border-2 border-white" />
           </span>
           {!isCollapsed && (
@@ -139,22 +152,44 @@ export default function DashboardSidebar({
           )}
         </Link>
 
-              {/* OpenWIC Developer Gateway */}
-        <Link
-          href="/openwic"
-          title="OpenWIC Developer Gateway"
-          className={`flex items-center gap-3 rounded-xl text-[13.5px] font-medium transition-all duration-200 ${
-            isCollapsed ? "justify-center py-2.5" : "px-3 py-2.5"
-          } ${
-            pathname === "/openwic" || pathname.startsWith("/openwic/")
-              ? "bg-[#0F172A] text-white shadow-[0_4px_12px_rgba(15,23,42,0.25)]"
-              : "text-[#86868B] hover:bg-[#F5F5F7] hover:text-[#1D1D1F]"
-          }`}
-        >
-          <Code2 className="w-5 h-5 flex-shrink-0" strokeWidth={pathname === "/openwic" || pathname.startsWith("/openwic/") ? 2.5 : 2} />
-          {!isCollapsed && <span className="tracking-tight">OpenWIC</span>}
-        </Link>
+        {/* More Button & Popover */}
+        <div className="relative more-menu-container" ref={moreMenuRef}>
+          <button
+            onClick={() => setIsMoreOpen(!isMoreOpen)}
+            className={`flex items-center gap-3 rounded-xl text-[13.5px] font-medium transition-all duration-200 w-full ${
+              isCollapsed ? "justify-center py-2.5" : "px-3 py-2.5"
+            } text-[#86868B] hover:bg-[#F5F5F7] hover:text-[#1D1D1F]`}
+          >
+            <MoreHorizontal className="w-5 h-5 flex-shrink-0" />
+            {!isCollapsed && <span className="tracking-tight">More</span>}
+          </button>
+
+          {/* Popover Menu */}
+          {isMoreOpen && (
+            <div className={`absolute bottom-0 ${isCollapsed ? "left-full ml-2" : "left-full ml-2"} w-56 bg-white rounded-xl border border-[#E5E5EA] shadow-[0_8px_30px_rgba(0,0,0,0.12)] z-50 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200`}>
+              <div className="p-1.5 space-y-1">
+                <Link 
+                  href="/calibrics" 
+                  onClick={() => setIsMoreOpen(false)} 
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors"
+                >
+                  <Globe className="w-4 h-4 text-[#F1622C]" />
+                  <span>Calibrics</span>
+                </Link>
+                <Link 
+                  href="/openwic" 
+                  onClick={() => setIsMoreOpen(false)} 
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium text-[#1D1D1F] hover:bg-[#F5F5F7] transition-colors"
+                >
+                  <Code2 className="w-4 h-4 text-[#0F172A]" />
+                  <span>OpenWIC</span>
+                </Link>
+              </div>
+            </div>
+          )}
+        </div>
        
+        {/* Settings Link */}
         <Link
           href="/settings"
           title="Settings"
