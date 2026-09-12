@@ -1,15 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Temporary mock rates for Phase 1 testing (We will hook this to your live FX fetcher next)
-const MOCK_FX_RATES: Record<string, number> = {
-  ETB: 1,       // Base
-  USD: 0.018,   // Example: 1 ETB = 0.018 USD
-  KES: 2.35,    // Example: 1 ETB = 2.35 KES
-  JPY: 2.75,    // Example: 1 ETB = 2.75 JPY
-  EUR: 0.016,
-  GBP: 0.014,
-};
-
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -22,28 +12,48 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const baseRate = MOCK_FX_RATES[baseCurrency.toUpperCase()] || 1;
-    const targetRate = MOCK_FX_RATES[targetCurrency.toUpperCase()] || 1;
-    
-    // The Calibrics Math: Convert to base, then to target
-    const calibratedAmount = (amount / baseRate) * targetRate;
-    const effectiveRate = targetRate / baseRate;
+    const base = baseCurrency.toUpperCase();
+    const target = targetCurrency.toUpperCase();
+
+    // Fetch live rates from a free, no-key-required API
+    // We cache the response for 1 hour (3600s) for blazing speed and API kindness
+    const response = await fetch(`https://open.er-api.com/v6/latest/${base}`, {
+      next: { revalidate: 3600 } 
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch live exchange rates");
+    }
+
+    const data = await response.json();
+    const liveRate = data.rates[target];
+
+    if (!liveRate) {
+      return NextResponse.json(
+        { error: `Target currency ${target} not supported by live rates` },
+        { status: 400 }
+      );
+    }
+
+    // The Calibrics Math: amount * liveRate (API returns rates relative to the base)
+    const calibratedAmount = amount * liveRate;
 
     return NextResponse.json({
       success: true,
-      original: { amount, currency: baseCurrency },
+      original: { amount, currency: base },
       calibrated: { 
         amount: Number(calibratedAmount.toFixed(2)), 
-        currency: targetCurrency.toUpperCase() 
+        currency: target 
       },
-      effectiveRate,
+      effectiveRate: liveRate,
       timestamp: new Date().toISOString(),
+      source: "Live ExchangeRate-API"
     });
 
   } catch (error) {
     console.error("Calibrics Engine Error:", error);
     return NextResponse.json(
-      { error: "Failed to calibrate price" },
+      { error: "Failed to calibrate price. Please try again." },
       { status: 500 }
     );
   }
