@@ -15,15 +15,39 @@ export default function DepositModal({ currency, flag, onClose }: Props) {
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState<"bank" | "card" | "mobile">("bank");
 
-  const handleDeposit = async () => {
+   const handleDeposit = async () => {
     if (!amount || parseFloat(amount) <= 0) return;
     
     setStep("processing");
     
-    // Simulate API call to initiate deposit
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    
-    setStep("success");
+    try {
+      // Call our real backend deposit route
+      const response = await fetch("/api/deposit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          amount: parseFloat(amount), 
+          currency, 
+          method 
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        console.log("✅ Deposit Initiated:", data.paymentIntentId);
+        // In a real app, you would now use data.clientSecret with Stripe.js or similar
+        setStep("success");
+      } else {
+        console.error("Deposit failed:", data.error);
+        alert("Failed to initiate deposit. Please try again.");
+        setStep("input");
+      }
+    } catch (error) {
+      console.error("Network error during deposit:", error);
+      alert("Network error. Please check your connection.");
+      setStep("input");
+    }
   };
 
   const formatCurrency = (val: string) => {
