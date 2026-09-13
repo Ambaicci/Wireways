@@ -176,6 +176,26 @@ export default function AiCommandBar() {
     setInput("");
   };
 
+  // ─── ACTIONABLE LINK PARSER ───
+  const renderMessageWithLinks = (text: string) => {
+    const parts = text.split(/(\/calibrics|\/wire-roll|\/openwic|\/payment-links)/g);
+    
+    return parts.map((part, index) => {
+      if (part === "/calibrics" || part === "/wire-roll" || part === "/openwic" || part === "/payment-links") {
+        return (
+          <button
+            key={index}
+            onClick={() => router.push(part)}
+            className="inline-flex items-center gap-1 px-2 py-0.5 mx-1 rounded-md bg-[#F1622C]/10 text-[#F1622C] text-[12px] font-bold hover:bg-[#F1622C]/20 transition-colors border border-[#F1622C]/20 align-middle"
+          >
+            {part} <ArrowRight className="w-3 h-3" />
+          </button>
+        );
+      }
+      return <span key={index}>{part}</span>;
+    });
+  };
+
   const meta = ACTION_META[draft?.actionType || "executePayment"] || ACTION_META.executePayment;
   const ActionIcon = meta.icon;
   const p = draft?.payload || {};
@@ -244,7 +264,7 @@ export default function AiCommandBar() {
                       m.role === "success" ? "bg-[#E7F2EC] text-[#287A55] rounded-bl-md" :
                       "bg-[#F5F5F7] text-[#1D1D1F] rounded-bl-md"
                     )}>
-                      {m.text}
+                      {renderMessageWithLinks(m.text)}
                     </div>
                   </motion.div>
                 ))}
@@ -317,7 +337,6 @@ export default function AiCommandBar() {
                     {/* Transaction Details */}
                     <div className="px-5 pb-5 pt-4">
                       {draft.actionType === "executeConversionAndPayment" ? (
-                        // CONVERSION LAYOUT
                         <div className="flex items-center gap-2 my-2">
                           <div className="flex-1 bg-white rounded-2xl p-4 text-center shadow-sm border border-[#E5E5EA]">
                             <p className="text-[9px] font-bold text-[#86868B] uppercase tracking-wider mb-1.5">You Send</p>
@@ -338,7 +357,6 @@ export default function AiCommandBar() {
                           </div>
                         </div>
                       ) : (
-                        // SEND MONEY LAYOUT
                         <div className="flex flex-col items-center py-2 bg-white rounded-2xl border border-[#E5E5EA] shadow-sm">
                           <p className="text-[10px] font-bold text-[#86868B] uppercase tracking-wider mb-1 mt-2">You're sending</p>
                           <p className="text-[22px] font-bold text-[#1D1D1F] tracking-tight mb-4">{formatCurrency(p.amount, p.currency || "USD")}</p>
@@ -353,7 +371,6 @@ export default function AiCommandBar() {
                             <span className="text-[14px] font-semibold text-[#1D1D1F]">{p.recipient || 'Unknown'}</span>
                           </div>
 
-                          {/* Clean Details Rows */}
                           <div className="w-full px-4 pb-4 space-y-1.5">
                             {p.rail && p.rail !== "Auto" && (
                               <div className="flex justify-between items-center px-3 py-2 bg-[#F5F5F7] rounded-lg">

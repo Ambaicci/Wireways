@@ -7,7 +7,7 @@ import { verifySession } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { sanitizePrompt } from "@/lib/sanitize";
 import { formatErrorResponse, AuthenticationError, ValidationError } from "@/lib/errors";
-import { getLiveUsdRates } from "@/lib/fx"; // <-- ADDED: Live FX Rates Import
+import { getLiveUsdRates } from "@/lib/fx";
 
 import { observeWorld } from "@/wic/observe";
 import { buildBriefing } from "@/wic/intelligence";
@@ -202,7 +202,7 @@ export async function POST(req: NextRequest) {
     } else if (synapseResult.intent === "CONVERT") {
       draftType = "CONVERSION_DRAFT";
       
-           // Calculate live rate mathematically using fetched data (with null fallbacks)
+      // Calculate live rate mathematically using fetched data (with null fallbacks)
       const fromCurrency = synapseResult.entities.currency || 'USD';
       const toCurrency = synapseResult.entities.targetCurrency || 'USD';
       const fromRate = fxRates[fromCurrency] || 1;
@@ -223,6 +223,16 @@ export async function POST(req: NextRequest) {
       };
     } else if (synapseResult.intent === "ANALYSIS") {
       message = synapseResult.reasoning || "Based on current data, this appears to be a reasonable time to proceed.";
+      
+      await db.execute(
+        "INSERT INTO conversations (user_id, messages) VALUES ($1, $2) ON CONFLICT(user_id) DO UPDATE SET messages = excluded.messages, updated_at = CURRENT_TIMESTAMP",
+        [userId, JSON.stringify([...history.slice(-9), { role: "user", content: prompt }, { role: "assistant", content: message }])]
+      );
+      
+      return NextResponse.json({ success: true, message });
+    } else if (synapseResult.intent === "INFO") {
+      // Handle informational queries (like Calibrics explanations) using the LLM's reasoning
+      message = synapseResult.reasoning || "I can help with sending payments, converting currencies, topping up wallets, payment links, recurring wire-rolls, balances, and cash-flow forecasts. What would you like to do?";
       
       await db.execute(
         "INSERT INTO conversations (user_id, messages) VALUES ($1, $2) ON CONFLICT(user_id) DO UPDATE SET messages = excluded.messages, updated_at = CURRENT_TIMESTAMP",
@@ -287,7 +297,7 @@ export async function POST(req: NextRequest) {
           payload,
           expiresAt,
           message,
-          requiresConfirmation: draftType === "RECURRING_DRAFT" || (synapseResult.entities.amount ?? 0) > 10000                  ,
+          requiresConfirmation: draftType === "RECURRING_DRAFT" || (synapseResult.entities.amount ?? 0) > 10000,
           confirmationReason: draftType === "RECURRING_DRAFT"
             ? "Recurring payments run automatically until cancelled."
             : (synapseResult.entities.amount ?? 0) > 10000                   
