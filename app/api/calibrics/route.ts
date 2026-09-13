@@ -1,5 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 
+// CORS headers to allow external websites to use the Calibrics API
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+// Handle browser preflight (OPTIONS) requests
+export async function OPTIONS() {
+  return NextResponse.json({}, { headers: corsHeaders });
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -8,7 +20,7 @@ export async function POST(req: NextRequest) {
     if (!amount || !baseCurrency || !targetCurrency) {
       return NextResponse.json(
         { error: "Missing amount, baseCurrency, or targetCurrency" },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -16,7 +28,6 @@ export async function POST(req: NextRequest) {
     const target = targetCurrency.toUpperCase();
 
     // Fetch live rates from a free, no-key-required API
-    // We cache the response for 1 hour (3600s) for blazing speed and API kindness
     const response = await fetch(`https://open.er-api.com/v6/latest/${base}`, {
       next: { revalidate: 3600 } 
     });
@@ -31,11 +42,11 @@ export async function POST(req: NextRequest) {
     if (!liveRate) {
       return NextResponse.json(
         { error: `Target currency ${target} not supported by live rates` },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
-    // The Calibrics Math: amount * liveRate (API returns rates relative to the base)
+    // The Calibrics Math: amount * liveRate
     const calibratedAmount = amount * liveRate;
 
     return NextResponse.json({
@@ -48,13 +59,13 @@ export async function POST(req: NextRequest) {
       effectiveRate: liveRate,
       timestamp: new Date().toISOString(),
       source: "Live ExchangeRate-API"
-    });
+    }, { headers: corsHeaders });
 
   } catch (error) {
     console.error("Calibrics Engine Error:", error);
     return NextResponse.json(
       { error: "Failed to calibrate price. Please try again." },
-      { status: 500 }
+      { status: 500, headers: corsHeaders }
     );
   }
 }
