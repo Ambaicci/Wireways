@@ -1,17 +1,18 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Globe, Zap, ArrowRight, Loader2, CheckCircle2,
   Coffee, Shirt, Code, ShoppingCart, FileText, Terminal, MessageCircle,
-  XCircle, Network, DollarSign, Copy, Check, ShieldCheck, ExternalLink
+  XCircle, Network, DollarSign, Copy, Check, ShieldCheck, ExternalLink, X
 } from "lucide-react";
 
 const CURRENCIES = ["USD", "KES", "JPY", "EUR", "GBP", "CNY"];
 
 type Tab = "overview" | "integrations";
 type Platform = "shopify" | "wordpress" | "custom" | "api";
+type InstallModal = "shopify" | "wordpress" | null;
 
 const PLATFORMS = [
   { id: "shopify" as Platform, name: "Shopify", desc: "One-click install from the App Store", icon: ShoppingCart, color: "bg-[#9C6B08]" },
@@ -25,6 +26,7 @@ export default function CalibricsPage() {
   const [activePlatform, setActivePlatform] = useState<Platform>("custom");
   const [copiedStep1, setCopiedStep1] = useState(false);
   const [copiedStep2, setCopiedStep2] = useState(false);
+  const [installModal, setInstallModal] = useState<InstallModal>(null);
 
   const [baseAmount, setBaseAmount] = useState("245");
   const [baseCurrency, setBaseCurrency] = useState("ETB");
@@ -345,11 +347,18 @@ export default function CalibricsPage() {
                 <div className="space-y-6">
                   <div className="flex items-start gap-4 p-5 rounded-[16px] bg-[#F1622C]/5 border border-[#F1622C]/20">
                     <ShieldCheck className="w-6 h-6 text-[#F1622C] flex-shrink-0 mt-1" />
-                    <div>
-                      <h4 className="text-[15px] font-bold text-[#1D1D1F] mb-1">Coming Soon to Shopify App Store</h4>
-                      <p className="text-[14px] text-[#86868B] leading-relaxed">
-                        Our official Shopify App is in development. Use the Custom HTML/JS method for now.
+                    <div className="flex-1">
+                      <h4 className="text-[15px] font-bold text-[#1D1D1F] mb-1">Wireways Calibrics for Shopify</h4>
+                      <p className="text-[14px] text-[#86868B] leading-relaxed mb-4">
+                        Our official Shopify App is currently in beta. Click below to see the installation preview.
                       </p>
+                      <button
+                        type="button"
+                        onClick={() => setInstallModal("shopify")}
+                        className="flex items-center gap-2 px-5 py-2.5 rounded-[10px] bg-[#F1622C] text-white text-[14px] font-bold hover:bg-[#D4511E] transition-colors cursor-pointer"
+                      >
+                        <ShoppingCart className="w-4 h-4" /> Preview Shopify Install
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -359,11 +368,18 @@ export default function CalibricsPage() {
                 <div className="space-y-6">
                   <div className="flex items-start gap-4 p-5 rounded-[16px] bg-[#287A55]/5 border border-[#287A55]/20">
                     <ShieldCheck className="w-6 h-6 text-[#287A55] flex-shrink-0 mt-1" />
-                    <div>
-                      <h4 className="text-[15px] font-bold text-[#1D1D1F] mb-1">Coming Soon to WordPress Plugin Directory</h4>
-                      <p className="text-[14px] text-[#86868B] leading-relaxed">
-                        Our WooCommerce plugin is in development. Use a plugin like "Insert Headers and Footers" to add the snippet.
+                    <div className="flex-1">
+                      <h4 className="text-[15px] font-bold text-[#1D1D1F] mb-1">Wireways Calibrics for WordPress</h4>
+                      <p className="text-[14px] text-[#86868B] leading-relaxed mb-4">
+                        Our WooCommerce plugin is currently in beta. Click below to see the installation preview.
                       </p>
+                      <button
+                        type="button"
+                        onClick={() => setInstallModal("wordpress")}
+                        className="flex items-center gap-2 px-5 py-2.5 rounded-[10px] bg-[#287A55] text-white text-[14px] font-bold hover:bg-[#1F5F43] transition-colors cursor-pointer"
+                      >
+                        <FileText className="w-4 h-4" /> Preview WordPress Install
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -436,6 +452,130 @@ export default function CalibricsPage() {
         </section>
 
       </div>
+
+      {/* ═══════════════════════════════════════ */}
+      {/* ─── INSTALL MODALS ─── */}
+      {/* ═══════════════════════════════════════ */}
+      <AnimatePresence>
+        {installModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4"
+            onClick={() => setInstallModal(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              className="bg-white rounded-[24px] w-full max-w-[560px] shadow-2xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div className={`px-6 py-5 border-b border-[#E5E5EA] flex items-center justify-between ${
+                installModal === "shopify" ? "bg-[#9C6B08]/5" : "bg-[#287A55]/5"
+              }`}>
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-lg ${installModal === "shopify" ? "bg-[#9C6B08]" : "bg-[#287A55]"} flex items-center justify-center`}>
+                    {installModal === "shopify" ? (
+                      <ShoppingCart className="w-5 h-5 text-white" />
+                    ) : (
+                      <FileText className="w-5 h-5 text-white" />
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-[17px] font-bold text-[#1D1D1F]">
+                      {installModal === "shopify" ? "Shopify App" : "WordPress Plugin"}
+                    </h3>
+                    <p className="text-[12px] text-[#86868B]">Installation Preview</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setInstallModal(null)}
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-[#86868B] hover:bg-[#F5F5F7] hover:text-[#1D1D1F] transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div className="p-6 space-y-6">
+                {installModal === "shopify" && (
+                  <>
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#F1622C]/10 border border-[#F1622C]/20">
+                      <span className="text-[11px] font-bold text-[#F1622C] uppercase tracking-wider">Beta Access</span>
+                    </div>
+                    <div className="space-y-4">
+                      <h4 className="text-[15px] font-bold text-[#1D1D1F]">Installation Steps:</h4>
+                      <div className="space-y-3">
+                        {[
+                          "Go to your Shopify Admin",
+                          "Navigate to Apps → Shopify App Store",
+                          "Search for 'Wireways Calibrics'",
+                          "Click 'Add app' and authorize",
+                          "Configure your base currency and products",
+                        ].map((step, idx) => (
+                          <div key={idx} className="flex items-start gap-3">
+                            <div className="w-6 h-6 rounded-full bg-[#9C6B08]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                              <span className="text-[11px] font-bold text-[#9C6B08]">{idx + 1}</span>
+                            </div>
+                            <p className="text-[14px] text-[#1D1D1F]">{step}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="pt-4 border-t border-[#E5E5EA]">
+                      <button
+                        type="button"
+                        className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-[10px] bg-[#9C6B08] text-white text-[14px] font-bold hover:bg-[#7A5506] transition-colors cursor-pointer"
+                      >
+                        Request Beta Access <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {installModal === "wordpress" && (
+                  <>
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#287A55]/10 border border-[#287A55]/20">
+                      <span className="text-[11px] font-bold text-[#287A55] uppercase tracking-wider">Beta Access</span>
+                    </div>
+                    <div className="space-y-4">
+                      <h4 className="text-[15px] font-bold text-[#1D1D1F]">Installation Steps:</h4>
+                      <div className="space-y-3">
+                        {[
+                          "Go to your WordPress Admin",
+                          "Navigate to Plugins → Add New",
+                          "Search for 'Wireways Calibrics'",
+                          "Click 'Install Now' then 'Activate'",
+                          "Go to Settings → Wireways Calibrics to configure",
+                        ].map((step, idx) => (
+                          <div key={idx} className="flex items-start gap-3">
+                            <div className="w-6 h-6 rounded-full bg-[#287A55]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                              <span className="text-[11px] font-bold text-[#287A55]">{idx + 1}</span>
+                            </div>
+                            <p className="text-[14px] text-[#1D1D1F]">{step}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="pt-4 border-t border-[#E5E5EA]">
+                      <button
+                        type="button"
+                        className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-[10px] bg-[#287A55] text-white text-[14px] font-bold hover:bg-[#1F5F43] transition-colors cursor-pointer"
+                      >
+                        Request Beta Access <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
