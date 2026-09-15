@@ -12,7 +12,7 @@ import {
 
 export type Intent =
   | "PAYMENT" | "CONVERT" | "TOPUP" | "REQUEST" | "RECURRING"
-  | "BALANCE" | "ANALYSIS" | "UNKNOWN";
+  | "BALANCE" | "ANALYSIS" | "INFO" | "UNKNOWN";
 
 export interface Entities {
   recipient: string | null;
@@ -51,6 +51,7 @@ const REQUIRED_FIELDS: Record<Intent, FieldKey[] | null> = {
   RECURRING: ["recipient", "amount", "currency", "frequency"],
   BALANCE: null,
   ANALYSIS: null,
+  INFO: null,
   UNKNOWN: null,
 };
 

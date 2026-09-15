@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Check, Loader2, Building2, CreditCard, Smartphone, ArrowRight } from "lucide-react";
 
@@ -11,17 +12,17 @@ export interface Props {
 }
 
 export default function DepositModal({ currency, flag, onClose }: Props) {
+  const router = useRouter();
   const [step, setStep] = useState<"input" | "processing" | "success">("input");
   const [amount, setAmount] = useState("");
   const [method, setMethod] = useState<"bank" | "card" | "mobile">("bank");
 
-   const handleDeposit = async () => {
+  const handleDeposit = async () => {
     if (!amount || parseFloat(amount) <= 0) return;
     
     setStep("processing");
     
     try {
-      // Call our real backend deposit route
       const response = await fetch("/api/deposit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -35,8 +36,8 @@ export default function DepositModal({ currency, flag, onClose }: Props) {
       const data = await response.json();
 
       if (data.success) {
-        console.log("✅ Deposit Initiated:", data.paymentIntentId);
-        // In a real app, you would now use data.clientSecret with Stripe.js or similar
+        console.log("✅ Deposit Successful:", data.transactionUuid);
+        router.refresh(); // Instantly refreshes server components to show new balance
         setStep("success");
       } else {
         console.error("Deposit failed:", data.error);
@@ -192,9 +193,9 @@ export default function DepositModal({ currency, flag, onClose }: Props) {
                 >
                   <Check className="w-7 h-7 text-[#287A55]" strokeWidth={3} />
                 </motion.div>
-                <h4 className="text-[20px] font-bold text-[#1D1D1F] tracking-tight">Deposit Initiated!</h4>
+                <h4 className="text-[20px] font-bold text-[#1D1D1F] tracking-tight">Deposit Successful!</h4>
                 <p className="text-[14px] text-[#86868B] leading-relaxed max-w-[280px] mx-auto">
-                  Your deposit of <span className="font-semibold text-[#1D1D1F]">{formatCurrency(amount)} {currency}</span> is being processed. You will be notified once the funds are available.
+                  Your deposit of <span className="font-semibold text-[#1D1D1F]">{formatCurrency(amount)} {currency}</span> has been added to your wallet.
                 </p>
                 <button
                   onClick={onClose}

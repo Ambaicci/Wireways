@@ -14,7 +14,7 @@ export interface SynapseEntities {
 }
 
 export interface SynapseResponse {
-  intent: "PAYMENT" | "CONVERT" | "TOPUP" | "REQUEST" | "RECURRING" | "BALANCE" | "ANALYSIS" | "UNKNOWN";
+  intent: "PAYMENT" | "CONVERT" | "TOPUP" | "REQUEST" | "RECURRING" | "BALANCE" | "ANALYSIS" | "INFO" | "UNKNOWN";
   entities: SynapseEntities;
   needsClarification: boolean;
   clarificationQuestion: string | null;

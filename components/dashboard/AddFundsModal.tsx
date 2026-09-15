@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { X, Check, Loader2, Smartphone, CreditCard, Building2, Store, MapPin, Copy } from "lucide-react";
+import { X, Check, Loader2, Smartphone, CreditCard, Building2, Store, MapPin, Copy, AlertCircle } from "lucide-react";
 import WicIcon from "@/components/ui/WicIcon";
 
 export default function AddFundsModal({
@@ -16,12 +17,14 @@ export default function AddFundsModal({
   currency?: string;
   virtualAccount?: { number: string; bank: string } | null;
 }) {
+  const router = useRouter();
   const [method, setMethod] = useState<"mobile" | "card" | "bank" | "agent">("mobile");
   const [step, setStep] = useState(0);
   const [amount, setAmount] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [agentCode, setAgentCode] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -30,24 +33,65 @@ export default function AddFundsModal({
       setPhoneNumber("");
       setAgentCode("");
       setIsProcessing(false);
+      setErrorMessage(null);
     }
   }, [isOpen]);
 
   const amountNum = parseFloat(amount) || 0;
-  // Prevents the button from being clickable if Bank is selected but no virtual account exists
   const isValid = amountNum > 0 && (method !== "bank" || virtualAccount !== null);
 
   const handleTopUp = async () => {
-    // Double-check to prevent processing if they somehow bypass the disabled state
+    setErrorMessage(null); // Clear any previous error
+
     if (method === "bank" && !virtualAccount) {
-      alert("Bank transfers are not yet available. Please use Mobile Money or Card.");
+      setErrorMessage("Bank transfers are not yet available. Please use Mobile Money or Card.");
       return;
     }
 
+    if (amountNum <= 0) return;
+
     setIsProcessing(true);
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    setIsProcessing(false);
-    setStep(1);
+    
+    try {
+      const apiMethod = method === "agent" ? "mobile" : method;
+
+      console.log("📤 Sending deposit request:", { amount: amountNum, currency, method: apiMethod });
+
+            const response = await fetch("/api/deposit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          amount: amountNum, 
+          currency, 
+          method: apiMethod 
+        }),
+      });
+
+      // Read the raw text first to see EXACTLY what the server sent
+      const rawText = await response.text();
+      console.log("📥 RAW SERVER RESPONSE TEXT:", rawText);
+      
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch (e) {
+        console.error("💥 Server did not return valid JSON. Raw text:", rawText);
+        data = { error: "Server returned an invalid response (check terminal)" };
+      }
+      if (data.success) {
+        console.log("✅ Deposit Successful:", data.transactionUuid);
+        router.refresh();
+        setStep(1);
+      } else {
+        console.error("❌ Deposit failed:", data);
+        setErrorMessage(data.message || data.error || "Failed to process deposit. Please try again.");
+        setIsProcessing(false);
+      }
+    } catch (error) {
+      console.error("💥 Network error:", error);
+      setErrorMessage("Network error. Please check your connection and try again.");
+      setIsProcessing(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -150,12 +194,29 @@ export default function AddFundsModal({
           ) : (
             /* ═══ FORM STATE (iOS Inset Grouped) ═══ */
             <>
+              {/* Error Message Display */}
+              {errorMessage && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-[#FEE2E2] border border-[#FCA5A5] rounded-[12px] p-3 flex items-start gap-2.5"
+                >
+                  <AlertCircle className="w-4 h-4 text-[#DC2626] mt-0.5 flex-shrink-0" />
+                  <p className="text-[13px] text-[#DC2626] leading-relaxed flex-1">{errorMessage}</p>
+                  <button onClick={() => setErrorMessage(null)} className="text-[#DC2626] hover:text-[#991B1B]">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </motion.div>
+              )}
+
               {/* Amount Section */}
               <div className="bg-white rounded-[12px] overflow-hidden shadow-sm">
                 <div className="p-4">
                   <label className="text-[11px] font-bold text-[#86868B] uppercase tracking-wider mb-2 block">Amount to Add</label>
                   <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[18px] font-bold text-[#1D1D1F]">$</span>
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[18px] font-bold text-[#1D1D1F]">
+                      {currency === "USD" ? "$" : currency === "EUR" ? "€" : currency === "GBP" ? "£" : currency}
+                    </span>
                     <input
                       type="number"
                       value={amount}
