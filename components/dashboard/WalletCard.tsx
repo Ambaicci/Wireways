@@ -5,6 +5,7 @@ import { AnimatePresence } from "framer-motion";
 import { ArrowLeftRight, Copy } from "lucide-react";
 import DepositModal from "./DepositModal";
 import ConvertModal from "./ConvertModal";
+import WithdrawModal from "./WithdrawModal";
 
 // Helper to format the currency symbols properly
 const formatBalance = (currency: string, balance: number) => {
@@ -28,11 +29,13 @@ export default function WalletCard({
 }) {
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
   const [isConvertModalOpen, setIsConvertModalOpen] = useState(false);
+  const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
 
-  // Bypass TypeScript checking for the temporary DepositModal stub
+  // Props for Deposit Modal
   const depositModalProps: any = {
     currency: wallet.currency,
     flag,
+    isOpen: isDepositModalOpen,
     onClose: () => setIsDepositModalOpen(false)
   };
 
@@ -68,34 +71,54 @@ export default function WalletCard({
           </button>
         </div>
 
-        <div className="flex gap-3 mt-auto">
-          <button 
-            onClick={() => setIsConvertModalOpen(true)}
-            className="flex-1 flex items-center justify-center gap-2 text-sm font-medium bg-neutral-900 text-white px-4 py-2 rounded-lg hover:bg-neutral-700 transition-colors"
-          >
-            <ArrowLeftRight className="w-4 h-4" />
-            Convert
-          </button>
+        {/* Action Buttons Grid */}
+        <div className="grid grid-cols-2 gap-2 mt-auto">
           <button 
             onClick={() => setIsDepositModalOpen(true)}
-            className="flex-1 flex items-center justify-center gap-2 text-sm font-medium border border-neutral-200 bg-white/50 text-neutral-700 px-4 py-2 rounded-lg hover:bg-white transition-colors"
+            className="flex items-center justify-center gap-2 text-sm font-medium border border-neutral-200 bg-white/50 text-neutral-700 px-4 py-2.5 rounded-lg hover:bg-white transition-colors"
           >
             Add Funds
+          </button>
+          
+          <button 
+            onClick={() => setIsWithdrawModalOpen(true)}
+            className="flex items-center justify-center gap-2 text-sm font-medium border border-neutral-200 bg-white/50 text-neutral-700 px-4 py-2.5 rounded-lg hover:bg-white transition-colors"
+          >
+            Withdraw
+          </button>
+
+          <button 
+            onClick={() => setIsConvertModalOpen(true)}
+            className="col-span-2 flex items-center justify-center gap-2 text-sm font-medium bg-neutral-900 text-white px-4 py-2.5 rounded-lg hover:bg-neutral-700 transition-colors"
+          >
+            <ArrowLeftRight className="w-4 h-4" />
+            Convert Currency
           </button>
         </div>
       </div>
 
+      {/* Modals */}
       <AnimatePresence>
         {isDepositModalOpen && (
           <DepositModal {...depositModalProps} />
         )}
-                {isConvertModalOpen && (
+        
+        {isConvertModalOpen && (
           <ConvertModal 
             {...{
               currency: wallet.currency,
               flag,
               onClose: () => setIsConvertModalOpen(false)
             } as any}
+          />
+        )}
+
+        {isWithdrawModalOpen && (
+          <WithdrawModal 
+            isOpen={isWithdrawModalOpen}
+            onClose={() => setIsWithdrawModalOpen(false)}
+            currency={wallet.currency}
+            availableBalance={wallet.balance}
           />
         )}
       </AnimatePresence>

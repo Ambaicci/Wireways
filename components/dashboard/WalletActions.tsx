@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, ArrowLeftRight, Trash2 } from "lucide-react";
+import { Plus, ArrowLeftRight, ArrowUpRight, Trash2 } from "lucide-react";
 import AddFundsModal from "./AddFundsModal";
 import ConvertModal from "./ConvertModal";
+import WithdrawModal from "./WithdrawModal";
 import CloseWalletModal from "./CloseWalletModal";
 
 interface WalletActionsProps {
@@ -14,10 +15,13 @@ interface WalletActionsProps {
 export default function WalletActions({ currency, balance }: WalletActionsProps) {
   const [isAddFundsOpen, setIsAddFundsOpen] = useState(false);
   const [isConvertOpen, setIsConvertOpen] = useState(false);
+  const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
   const [isCloseWalletOpen, setIsCloseWalletOpen] = useState(false);
 
   return (
     <div className="flex flex-col gap-3 mt-6">
+      
+      {/* Row 1: Add Funds & Withdraw */}
       <div className="flex gap-3">
         {/* Add Funds Button */}
         <button 
@@ -28,17 +32,26 @@ export default function WalletActions({ currency, balance }: WalletActionsProps)
           Add Funds
         </button>
 
-        {/* Convert Button */}
+        {/* Withdraw Button */}
         <button 
-          onClick={() => setIsConvertOpen(true)}
+          onClick={() => setIsWithdrawOpen(true)}
           className="flex-1 flex items-center justify-center gap-2 bg-white text-[#0E1116] border border-[#E4E6EB] py-3 rounded-[12px] text-[14px] font-semibold hover:border-[#0E1116] transition-all shadow-sm"
         >
-          <ArrowLeftRight className="w-4 h-4" />
-          Convert
+          <ArrowUpRight className="w-4 h-4" />
+          Withdraw
         </button>
       </div>
 
-      {/* Close Wallet Button */}
+      {/* Row 2: Convert */}
+      <button 
+        onClick={() => setIsConvertOpen(true)}
+        className="w-full flex items-center justify-center gap-2 bg-white text-[#0E1116] border border-[#E4E6EB] py-3 rounded-[12px] text-[14px] font-semibold hover:border-[#0E1116] transition-all shadow-sm"
+      >
+        <ArrowLeftRight className="w-4 h-4" />
+        Convert
+      </button>
+
+      {/* Row 3: Close Wallet */}
       <button 
         onClick={() => setIsCloseWalletOpen(true)}
         className="w-full flex items-center justify-center gap-2 bg-red-50 text-red-600 border border-red-100 py-3 rounded-[12px] text-[14px] font-semibold hover:bg-red-100 transition-all shadow-sm"
@@ -47,7 +60,7 @@ export default function WalletActions({ currency, balance }: WalletActionsProps)
         Close Wallet
       </button>
 
-      {/* Modals with Unique Keys to fix the error */}
+      {/* Modals */}
       {isAddFundsOpen && (
         <AddFundsModal 
           key="add-funds-modal"
@@ -62,6 +75,16 @@ export default function WalletActions({ currency, balance }: WalletActionsProps)
           key="convert-modal"
           isOpen={isConvertOpen} 
           onClose={() => setIsConvertOpen(false)} 
+        />
+      )}
+
+      {isWithdrawOpen && (
+        <WithdrawModal 
+          key="withdraw-modal"
+          isOpen={isWithdrawOpen}
+          onClose={() => setIsWithdrawOpen(false)}
+          currency={currency}
+          availableBalance={balance}
         />
       )}
 
